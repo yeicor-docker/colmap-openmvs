@@ -59,6 +59,7 @@ RUN --mount=type=cache,target=/var/cache/apt,sharing=locked \
 ###############################################################################
 COPY vcpkg ${VCPKG_ROOT}
 COPY vcpkg_ports "${VCPKG_ROOT}/../vcpkg_ports"
+COPY vcpkg_triplets "${VCPKG_ROOT}/../vcpkg_triplets"
 RUN cd ${VCPKG_ROOT} && ./bootstrap-vcpkg.sh -disableMetrics && rm -rf .git
 
 ###############################################################################
@@ -105,6 +106,7 @@ RUN --mount=type=cache,target=/opt/vcpkg/cache,sharing=locked \
       export TRIPLET="$TRIPLET-release"; \
     fi; \
     export VCPKG_OVERLAY_PORTS="${VCPKG_ROOT}/../vcpkg_ports"; \
+    export VCPKG_OVERLAY_TRIPLETS="${VCPKG_ROOT}/../vcpkg_triplets"; \
     if [ "$(uname -m)" = "aarch64" ]; then \
         export COLMAP_CMAKE_CONFIGURE_OPTIONS="-DONNX_ENABLED=OFF"; \
     fi; \
@@ -161,6 +163,7 @@ RUN --mount=type=cache,target=/opt/vcpkg/cache,sharing=locked \
       export TRIPLET="$TRIPLET-release"; \
     fi; \
     export VCPKG_OVERLAY_PORTS="${VCPKG_ROOT}/../vcpkg_ports"; \
+    export VCPKG_OVERLAY_TRIPLETS="${VCPKG_ROOT}/../vcpkg_triplets"; \
     rm -r "/build/openMVS/mybuild/vcpkg_installed/$TRIPLET/tools/pkgconf" || true; \
     ccache --show-stats --verbose; ccache --zero-stats; \
     LOG=/tmp/cmake-configure.log; \
