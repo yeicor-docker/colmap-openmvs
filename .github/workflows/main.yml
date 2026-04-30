@@ -4,11 +4,12 @@ on:
       no_cache:
         description: "Skip downloading the cache, starting with a clean state. Note: cache upload will still be performed."
         required: false
-        default: "false"
+        default: false
+        type: boolean
       build_debug:
         description: "Build debug images (with debug symbols). Disabled by default."
         required: false
-        default: "false"
+        default: false
         type: boolean
   push:
     branches: [main, "renovate/*"]
