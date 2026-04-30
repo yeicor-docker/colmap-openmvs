@@ -56,7 +56,7 @@ RUN --mount=type=cache,target=/var/cache/apt,sharing=locked \
 # vcpkg (stable layer)
 ###############################################################################
 COPY vcpkg ${VCPKG_ROOT}
-COPY vcpkg_ports vcpkg_ports
+COPY vcpkg_ports "${VCPKG_ROOT}/../vcpkg_ports"
 RUN cd ${VCPKG_ROOT} && ./bootstrap-vcpkg.sh -disableMetrics && rm -rf .git
 
 ###############################################################################
@@ -67,7 +67,7 @@ RUN --mount=type=cache,target=/opt/vcpkg/cache,sharing=locked \
     --mount=type=cache,target=/build/colmap/mybuild,sharing=locked \
     set -Eeuo pipefail; \
     TRIPLET="$(uname -m | sed 's/x86_64/x64/;s/aarch64/arm64/')-linux-release"; \
-    export VCPKG_OVERLAY_PORTS=$(pwd)/vcpkg_ports; \
+    export VCPKG_OVERLAY_PORTS="${VCPKG_ROOT}/../vcpkg_ports"; \
     if [ "$(uname -m)" = "aarch64" ]; then \
         export COLMAP_CMAKE_CONFIGURE_OPTIONS="-DONNX_ENABLED=OFF"; \
     fi; \
@@ -121,7 +121,7 @@ RUN --mount=type=cache,target=/opt/vcpkg/cache,sharing=locked \
     --mount=type=cache,target=/build/openMVS/mybuild,sharing=locked \
     set -Eeuo pipefail; \
     TRIPLET="$(uname -m | sed 's/x86_64/x64/;s/aarch64/arm64/')-linux-release"; \
-    export VCPKG_OVERLAY_PORTS=$(pwd)/vcpkg_ports; \
+    export VCPKG_OVERLAY_PORTS="${VCPKG_ROOT}/../vcpkg_ports"; \
     rm -r "/build/openMVS/mybuild/vcpkg_installed/$TRIPLET/tools/pkgconf" || true; \
     ccache --show-stats --verbose; ccache --zero-stats; \
     LOG=/tmp/cmake-configure.log; \
