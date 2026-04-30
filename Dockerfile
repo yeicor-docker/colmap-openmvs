@@ -103,7 +103,7 @@ RUN --mount=type=cache,target=/opt/vcpkg/cache,sharing=locked \
     export TRIPLET="$(uname -m | sed 's/x86_64/x64/;s/aarch64/arm64/')-linux"; \
     if [ "$BUILD_TYPE" = "Release" ]; then \
       export TRIPLET="$TRIPLET-release"; \
-    fi \
+    fi; \
     export VCPKG_OVERLAY_PORTS="${VCPKG_ROOT}/../vcpkg_ports"; \
     if [ "$(uname -m)" = "aarch64" ]; then \
         export COLMAP_CMAKE_CONFIGURE_OPTIONS="-DONNX_ENABLED=OFF"; \
@@ -159,7 +159,7 @@ RUN --mount=type=cache,target=/opt/vcpkg/cache,sharing=locked \
     export TRIPLET="$(uname -m | sed 's/x86_64/x64/;s/aarch64/arm64/')-linux"; \
     if [ "$BUILD_TYPE" = "Release" ]; then \
       export TRIPLET="$TRIPLET-release"; \
-    fi \
+    fi; \
     export VCPKG_OVERLAY_PORTS="${VCPKG_ROOT}/../vcpkg_ports"; \
     rm -r "/build/openMVS/mybuild/vcpkg_installed/$TRIPLET/tools/pkgconf" || true; \
     ccache --show-stats --verbose; ccache --zero-stats; \
