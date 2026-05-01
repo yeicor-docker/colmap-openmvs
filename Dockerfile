@@ -51,7 +51,8 @@ RUN --mount=type=cache,target=/var/cache/apt,sharing=locked \
         python3-venv \
         libxi-dev libxtst-dev \
         libxinerama-dev libxcursor-dev xorg-dev \
-        libxrandr-dev"; \
+        libxrandr-dev \
+        libavcodec-dev libavformat-dev libavutil-dev libswscale-dev libswresample-dev"; \
     for attempt in 1 2 3; do sh -c "$APT_CMD" && break || ([ $attempt -lt 3 ] && sleep 5); done
 
 ###############################################################################
@@ -162,7 +163,6 @@ RUN --mount=type=cache,target=/opt/vcpkg/cache,sharing=locked \
       export TRIPLET="$TRIPLET-release"; \
     fi; \
     export VCPKG_OVERLAY_PORTS="${VCPKG_ROOT}/../vcpkg_ports"; \
-    rm -r "/build/openMVS/mybuild/vcpkg_installed/$TRIPLET/tools/pkgconf" || true; \
     ccache --show-stats --verbose; ccache --zero-stats; \
     LOG=/tmp/cmake-configure.log; \
     if ! cmake -S openMVS -B openMVS/mybuild -G Ninja \
