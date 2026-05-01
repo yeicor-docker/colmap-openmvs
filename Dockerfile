@@ -59,7 +59,6 @@ RUN --mount=type=cache,target=/var/cache/apt,sharing=locked \
 ###############################################################################
 COPY vcpkg ${VCPKG_ROOT}
 COPY vcpkg_ports "${VCPKG_ROOT}/../vcpkg_ports"
-COPY vcpkg_triplets "${VCPKG_ROOT}/../vcpkg_triplets"
 RUN cd ${VCPKG_ROOT} && ./bootstrap-vcpkg.sh -disableMetrics && rm -rf .git
 
 ###############################################################################
@@ -82,6 +81,7 @@ RUN set -eux; \
         'for arg in "$@"; do' \
         '  case "$arg" in' \
         '    *'"${VCPKG_ROOT}"'/buildtrees/openblas/src/*) exec __REAL__ "$@" ;; # See custom port' \
+        '    */vcpkg_installed/*/lib/libopenblas.a) exec __REAL__ "$@" -lm ;; # XXX: lm missing for some unknown reason and linker_flags adds it first, still breaking the build' \
         '  esac' \
         'done' \
         'exec __REAL__ "$@" '"$EXTRA_FLAGS"'' \
@@ -106,7 +106,6 @@ RUN --mount=type=cache,target=/opt/vcpkg/cache,sharing=locked \
       export TRIPLET="$TRIPLET-release"; \
     fi; \
     export VCPKG_OVERLAY_PORTS="${VCPKG_ROOT}/../vcpkg_ports"; \
-    export VCPKG_OVERLAY_TRIPLETS="${VCPKG_ROOT}/../vcpkg_triplets"; \
     if [ "$(uname -m)" = "aarch64" ]; then \
         export COLMAP_CMAKE_CONFIGURE_OPTIONS="-DONNX_ENABLED=OFF"; \
     fi; \
@@ -163,7 +162,6 @@ RUN --mount=type=cache,target=/opt/vcpkg/cache,sharing=locked \
       export TRIPLET="$TRIPLET-release"; \
     fi; \
     export VCPKG_OVERLAY_PORTS="${VCPKG_ROOT}/../vcpkg_ports"; \
-    export VCPKG_OVERLAY_TRIPLETS="${VCPKG_ROOT}/../vcpkg_triplets"; \
     rm -r "/build/openMVS/mybuild/vcpkg_installed/$TRIPLET/tools/pkgconf" || true; \
     ccache --show-stats --verbose; ccache --zero-stats; \
     LOG=/tmp/cmake-configure.log; \
