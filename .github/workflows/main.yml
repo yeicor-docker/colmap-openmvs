@@ -109,7 +109,6 @@ jobs:
           dockerfile: Dockerfile
           skip-extraction: true
       - name: Build
-        timeout-minutes: 240
         run: |
           BUILD_ARGS=""
           IMAGE_SUFFIX=""
