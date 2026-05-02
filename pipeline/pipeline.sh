@@ -25,7 +25,7 @@ for arg in "$@"; do
             exit 0
             ;;
         --print-vars)
-            "${SCRIPT_DIR}/discover.sh" --print-vars
+            "${SCRIPT_DIR}/discover.sh" --print-vars-shell
             exit 0
             ;;
     esac

@@ -2,7 +2,7 @@
 ################################################################################
 # Tool Discovery System - Auto-discovers COLMAP and OpenMVS tools
 # Dynamically generates YAML configuration from installed tools and stage files
-# Usage: ./discover.sh [--print-help | --print-vars | --print-vars-shell | --help]
+# Usage: ./discover.sh [--print-help | --print-vars-shell | --help]
 ################################################################################
 
 set -euo pipefail
@@ -85,9 +85,12 @@ get_tool_help() {
 
 find_env_vars_for_tool() {
     local tool_name="$1"
-    check_file="$(grep $tool_name "$STAGES_DIR"/*.stage.sh | sed 's/:.*//g')"
+    local check_file
+    check_file="$(grep -lF -- "$tool_name" "$STAGES_DIR"/*.stage.sh 2>/dev/null || true)"
     [[ -z "$check_file" ]] && return 0
-    grep -h -oP '\$\{[A-Z_][A-Z0-9_]*_ARGS\}' $check_file 2>/dev/null | \
+    local -a check_files
+    mapfile -t check_files <<< "$check_file"
+    grep -h -oP '\$\{[A-Z_][A-Z0-9_]*_ARGS\}' "${check_files[@]}" 2>/dev/null | \
         sed 's/[${}]//g' | sort -u || true
 }
 
