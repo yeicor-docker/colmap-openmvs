@@ -5,7 +5,7 @@ OUTPUTS=("${WORK_DIR}/colmap/database.db.matches")
 
 run_stage_function() {
     cd "${WORK_DIR}/colmap"
-    colmap ${COLMAP_MATCHER} \
+    colmap ${COLMAP_MATCHER:-vocab_tree_matcher}
         --database_path database.db \
         ${COLMAP_MATCHER_ARGS}
     touch database.db.matches

@@ -1,260 +1,182 @@
 #!/usr/bin/env bash
 ################################################################################
-# Tool Discovery System - Discovers COLMAP and OpenMVS tools from stages
-# Generates unified help, config templates, and tool documentation
-# Usage: ./discover.sh [--print-help | --print-config | --print-vars]
+# Tool Discovery System - Auto-discovers COLMAP and OpenMVS tools
+# Dynamically generates YAML configuration from installed tools and stage files
+# Usage: ./discover.sh [--print-help | --print-vars | --print-vars-shell | --help]
 ################################################################################
 
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 STAGES_DIR="${SCRIPT_DIR}/stages"
+OPENMVS_BIN_DIR="/usr/local/bin/OpenMVS"
 
 ################################################################################
-# Discover COLMAP tools and arguments from stages
+# YAML safe string escaping
 ################################################################################
 
-discover_colmap_from_stages() {
-    local -a feature_extractors matchers mappers undistorters
-    local feature_extractor_args matcher_args mapper_args undistorter_args
-
-    # Parse feature extraction stage
-    if [[ -f "${STAGES_DIR}/01_colmap_feature_extraction.stage.sh" ]]; then
-        feature_extractor_args=$(grep -oP 'COLMAP_FEATURE_EXTRACTOR_ARGS\K[^}]*' "${STAGES_DIR}/01_colmap_feature_extraction.stage.sh" 2>/dev/null || echo "")
-    fi
-
-    # Parse matching stage - extract COLMAP_MATCHER and COLMAP_MATCHER_ARGS
-    if [[ -f "${STAGES_DIR}/02_colmap_feature_matching.stage.sh" ]]; then
-        local matcher_line
-        matcher_line=$(grep -oP 'colmap \$\{COLMAP_MATCHER\}' "${STAGES_DIR}/02_colmap_feature_matching.stage.sh" 2>/dev/null || true)
-        if [[ -n "$matcher_line" ]]; then
-            # Known matchers based on COLMAP documentation
-            COLMAP_MATCHERS="vocab_tree_matcher exhaustive_matcher spatial_matcher sequential_matcher transitive_matcher"
-        fi
-        matcher_args=$(grep -oP 'COLMAP_MATCHER_ARGS\K[^}]*' "${STAGES_DIR}/02_colmap_feature_matching.stage.sh" 2>/dev/null || echo "")
-    fi
-
-    # Parse mapping stage - extract COLMAP_MAPPER and COLMAP_MAPPER_ARGS
-    if [[ -f "${STAGES_DIR}/03_colmap_mapping.stage.sh" ]]; then
-        local mapper_line
-        mapper_line=$(grep -oP 'colmap \$\{COLMAP_MAPPER\}' "${STAGES_DIR}/03_colmap_mapping.stage.sh" 2>/dev/null || true)
-        if [[ -n "$mapper_line" ]]; then
-            # Known mappers based on COLMAP documentation
-            COLMAP_MAPPERS="global_mapper mapper"
-        fi
-        mapper_args=$(grep -oP 'COLMAP_MAPPER_ARGS\K[^}]*' "${STAGES_DIR}/03_colmap_mapping.stage.sh" 2>/dev/null || echo "")
-    fi
-
-    # Parse undistortion stage
-    if [[ -f "${STAGES_DIR}/04_colmap_undistortion.stage.sh" ]]; then
-        undistorter_args=$(grep -oP 'COLMAP_UNDISTORTER_ARGS\K[^}]*' "${STAGES_DIR}/04_colmap_undistortion.stage.sh" 2>/dev/null || echo "")
-    fi
-
-    COLMAP_TOOLS="feature_extractor feature_matching mapper undistortion"
+yaml_escape() {
+    local str="$1"
+    str="${str//\\/\\\\}"
+    str="${str//\"/\\\"}"
+    str="${str//$'\n'/\\n}"
+    echo "\"${str}\""
 }
 
 ################################################################################
-# Discover OpenMVS tools from stages
+# Discover environment variables from stage files
 ################################################################################
 
-discover_openmvs_from_stages() {
-    local -a tools
-    local tool_name tool_args
-
-    # Scan all OpenMVS stages and extract tool names and args
-    for stage_file in "${STAGES_DIR}"/05_openmvs_*.stage.sh; do
-        [[ ! -f "$stage_file" ]] && continue
-
-        # Extract tool name (first command after cd)
-        tool_name=$(grep -oP '(?:^|\s)([A-Z][a-zA-Z]+)(?:\s|$)' "$stage_file" | grep -v 'cd\|mkdir\|touch' | head -1 | tr -d ' ' || true)
-
-        if [[ -n "$tool_name" ]]; then
-            local stage_basename
-            stage_basename=$(basename "$stage_file" .stage.sh)
-            local env_name
-            env_name=$(echo "$stage_basename" | sed 's/^[0-9]*_openmvs_//' | sed 's/_/ /g' | tr '[:lower:]' '[:upper:]' | tr ' ' '_')
-
-            # Store tool info
-            echo "$tool_name|$env_name"
-        fi
-    done | sort -u
+discover_env_vars_from_stages() {
+    [[ -d "$STAGES_DIR" ]] || return 0
+    for stage_file in $(ls "$STAGES_DIR"/*.stage.sh 2>/dev/null | sort); do
+        grep -h -oP '\$\{[A-Z_][A-Z0-9_]*(:-[^}]*)?\}' "$stage_file" | \
+            sed -E 's/\$\{([A-Z_][A-Z0-9_]*)(:-[^}]*)?\}/\1/g' | sort -u | \
+            while read -r var; do
+                [[ "$var" =~ IMAGES_DIR|WORK_DIR ]] && continue  # Skip core path variables
+                echo "$var"
+            done
+    done || true
 }
 
 ################################################################################
-# Generate unified help with tool details
+# Discover COLMAP tools
 ################################################################################
 
-generate_help() {
-    discover_colmap_from_stages
+discover_colmap_tools() {
+    command -v colmap &>/dev/null || return 1
+    colmap --help 2>&1 | awk '
+        /^[[:space:]]{2,}[a-z_]+/ {
+            gsub(/^[[:space:]]+/, "")
+            cmd = $1
+            if (cmd !~ /^(help|options|usage|colmap)$/) {
+                print cmd
+            }
+        }
+    ' | sort -u
+}
 
-    cat << 'EOF'
-================================================================================
-Photogrammetry Pipeline - COLMAP + OpenMVS
-================================================================================
+################################################################################
+# Discover OpenMVS tools
+################################################################################
 
-USAGE:
-  pipeline.sh <work-dir> [options]
+discover_openmvs_tools() {
+    [[ -d "$OPENMVS_BIN_DIR" ]] || return 1
+    find "$OPENMVS_BIN_DIR" -maxdepth 1 -type f -executable 2>/dev/null | \
+        xargs -I {} basename {} | grep -v '^\.' | sort -u || true
+}
 
-ARGUMENTS:
-  work-dir              Directory containing images/ subdirectory
+################################################################################
+# Get help text for a tool
+################################################################################
 
-OPTIONS:
-  -v, --verbose         Enable verbose output with real-time execution logs
-  --dry-run             Show what would be executed without running
-  --force STAGES        Force re-run specific stages (comma-separated list)
-  --skip STAGES         Skip specific stages (comma-separated list)
-  -h, --help            Show this help message
-
-EXAMPLES:
-  pipeline.sh /data/project
-  pipeline.sh /data/project -v --dry-run
-  pipeline.sh /data/project --force 01_colmap_feature_extraction,03_colmap_mapping
-  pipeline.sh /data/project --skip 06_openmvs_sparse_mesh
-
-PIPELINE STAGES:
-  COLMAP (Feature Detection, Matching, Mapping):
-    01_colmap_feature_extraction    Extract SIFT features from images
-    02_colmap_feature_matching      Match features between image pairs
-    03_colmap_mapping               Structure-from-motion reconstruction
-    04_colmap_undistortion          Undistort images for dense matching
-
-  OpenMVS (Dense Reconstruction):
-    05_openmvs_scene_export         Convert COLMAP output to MVS format
-    06_openmvs_sparse_mesh          Reconstruct sparse mesh
-    07_openmvs_sparse_refine        Refine sparse mesh
-    08_openmvs_sparse_texture       Texture sparse mesh
-    09_openmvs_densify              Generate dense point cloud
-    10_openmvs_dense_mesh           Reconstruct dense mesh
-    11_openmvs_dense_refine         Refine dense mesh
-    12_openmvs_dense_texture        Texture dense mesh
-
-USAGE EXAMPLES:
-  # Use exhaustive matcher for better quality (slower)
-  export COLMAP_MATCHER=exhaustive_matcher
-  pipeline.sh /data/project
-
-  # Use incremental mapper instead of global
-  export COLMAP_MAPPER=mapper
-  pipeline.sh /data/project
-
-  # Parallelize feature extraction with 8 threads
-  export COLMAP_FEATURE_EXTRACTOR_ARGS="--SiftExtraction.num_threads 8"
-  pipeline.sh /data/project
-
-  # Combine multiple settings
-  COLMAP_MATCHER=exhaustive_matcher COLMAP_MATCHER_ARGS="--ExhaustiveMatching.num_threads 8" \
-    pipeline.sh /data/project -v
-
-OUTPUT STRUCTURE:
-  <work-dir>/
-    images/                         Input images (required)
-    logs/                         Execution logs for each stage
-    colmap/
-      database.db                   COLMAP feature database
-      sparse/0/                     Sparse reconstruction (cameras, images, points)
-      dense/                        Undistorted images for dense reconstruction
-    openmvs/
-      scene.mvs                     MVS scene file
-      scene_mesh.ply                Sparse mesh output
-      scene_dense.mvs               Dense point cloud
-      scene_dense_mesh.ply          Final dense mesh
-
-================================================================================
-COLMAP TOOL HELP:
-================================================================================
-EOF
-
-    # Print COLMAP main help
-    echo "COLMAP Main Help:"
-    colmap --help 2>/dev/null || echo "  (COLMAP not installed or not in PATH)"
-    echo ""
-
-    # Discover and print help for each COLMAP subcommand
-    if command -v colmap &> /dev/null; then
-        local colmap_commands
-        colmap_commands=$(colmap --help | grep -oP '^\s+\K[a-z_]+(?=\s|$)' | grep -v '^$' || true)
-
-        if [[ -n "$colmap_commands" ]]; then
-            while IFS= read -r cmd; do
-                [[ -z "$cmd" ]] && continue
-                echo "===> COLMAP $cmd Help:"
-                colmap "$cmd" --help || echo "  (Command '$cmd' not available)"
-                echo ""
-            done <<< "$colmap_commands"
-        fi
-    fi
-
-    cat << 'EOF'
-================================================================================
-OPENMVS TOOL HELP:
-================================================================================
-EOF
-
-    # Discover and print help for each OpenMVS tool
-    local openmvs_bin_dir="/usr/local/bin/OpenMVS"
-    if [[ -d "$openmvs_bin_dir" ]]; then
-        local openmvs_tools
-        openmvs_tools=$(ls "$openmvs_bin_dir" | grep -v '^\.' || true)
-
-        if [[ -n "$openmvs_tools" ]]; then
-            while IFS= read -r tool; do
-                [[ -z "$tool" ]] && continue
-                echo "===> OpenMVS $tool Help:"
-                "$openmvs_bin_dir/$tool" --help || true # || echo "  (Tool '$tool' not available)"
-                echo ""
-            done <<< "$openmvs_tools"
-        fi
+get_tool_help() {
+    local tool="$1" tool_path="${2:-}"
+    if [[ -z "$tool_path" ]]; then
+        colmap "$tool" --help 2>&1 | grep -v 'option_manager.cc' || echo ""
     else
-        echo "  (OpenMVS not found in $openmvs_bin_dir)"
+        "$tool_path" --help 2>&1 | grep -v '\[App' || echo ""
     fi
-
-    cat << 'EOF'
-================================================================================
-
-To configure the stages as shown above, set the following environment variables:
-EOF
-    print_vars
 }
 
 ################################################################################
-# Print discovered variables
+# Find environment variables used for a tool in stage files
 ################################################################################
 
-print_vars() {
-    local -A defined_vars
-    local -a undefined_vars
+find_env_vars_for_tool() {
+    local tool_name="$1"
+    check_file="$(grep $tool_name "$STAGES_DIR"/*.stage.sh | sed 's/:.*//g')"
+    [[ -z "$check_file" ]] && return 0
+    grep -h -oP '\$\{[A-Z_][A-Z0-9_]*_ARGS\}' $check_file 2>/dev/null | \
+        sed 's/[${}]//g' | sort -u || true
+}
 
-    # Collect all variable accesses from stage files
-    local all_vars
-    all_vars=$(grep -h -oP '\$\{[A-Z_][A-Z0-9_]*\}' "${STAGES_DIR}"/*.stage.sh | sed 's/[${}]//g')
+################################################################################
+# Output a single tool entry in YAML format
+################################################################################
 
-    # Variables defined in pipeline.sh (these should not be reported)
-    defined_vars=$(grep -h -oP '[A-Z_][A-Z0-9_]*=' "${SCRIPT_DIR}/pipeline.sh" | sed 's/=//g')
-    for var in $defined_vars; do
-        defined_vars["$var"]=1
-    done
+output_tool_entry() {
+    local tool="$1" tool_path="${2:-}"
+    local help_text tool_env_vars
 
-    # Find all undefined variables
-    while IFS= read -r var; do
+    help_text=$(get_tool_help "$tool" "$tool_path" 2>/dev/null || echo "")
+    tool_env_vars=$(find_env_vars_for_tool "$tool")
+
+    echo "    $tool:"
+    echo "      help: $(yaml_escape "$help_text")"
+
+    if [[ -n "$tool_env_vars" ]]; then
+        echo "      environment_variables:"
+        echo "$tool_env_vars" | while read -r var; do
+            [[ -z "$var" ]] && continue
+            echo "        - $var"
+        done
+    else
+        echo "      environment_variables: []"
+    fi
+}
+
+################################################################################
+# Generate YAML help from discovered tools
+################################################################################
+
+generate_help_yaml() {
+    cat << 'YAML_START'
+---
+tools:
+  colmap:
+YAML_START
+
+    local colmap_tools
+    colmap_tools=$(discover_colmap_tools 2>/dev/null || true)
+
+    while IFS= read -r tool; do
+        [[ -z "$tool" ]] && continue
+        output_tool_entry "$tool"
+    done <<< "$colmap_tools"
+
+    echo "  openmvs:"
+
+    local openmvs_tools
+    openmvs_tools=$(discover_openmvs_tools 2>/dev/null || true)
+
+    while IFS= read -r tool; do
+        [[ -z "$tool" ]] && continue
+        output_tool_entry "$tool" "$OPENMVS_BIN_DIR/$tool"
+    done <<< "$openmvs_tools"
+}
+
+################################################################################
+# Generate YAML variables configuration
+################################################################################
+
+generate_vars_yaml() {
+    cat << 'VARS_START'
+environment_variables:
+VARS_START
+
+    local all_env_vars
+    all_env_vars=$(discover_env_vars_from_stages)
+
+    echo "$all_env_vars" | while read -r var; do
         [[ -z "$var" ]] && continue
-        if [[ -z "${defined_vars[$var]:-}" ]]; then
-            undefined_vars+=("$var")
-        fi
-    done <<< "$all_vars"
+        echo "  $var:"
+        echo "    type: string"
+    done
+}
 
-    COLMAP_MATCHERS=(vocab_tree_matcher exhaustive_matcher spatial_matcher sequential_matcher transitive_matcher)
-    COLMAP_MAPPERS=(global_mapper mapper)
+################################################################################
+# Generate shell-compatible variable exports
+################################################################################
 
-    # Print discovered undefined variables
-    for var in "${undefined_vars[@]}"; do
-        # Special case for non-args variables:
-        if [[ "$var" == "COLMAP_MATCHER" ]]; then
-            echo "export COLMAP_MATCHER=\"\${COLMAP_MATCHER:-${COLMAP_MATCHERS[0]}}\" # Available matchers: ${COLMAP_MATCHERS[@]}"
-        elif [[ "$var" == "COLMAP_MAPPER" ]]; then
-            echo "export COLMAP_MAPPER=\"\${COLMAP_MAPPER:-${COLMAP_MAPPERS[0]}}\" # Available mappers: ${COLMAP_MAPPERS[@]}"
-        else
-            echo "export $var=\"\${${var}:-}\""
-        fi
+generate_vars_shell() {
+    local all_env_vars
+    all_env_vars=$(discover_env_vars_from_stages)
+    [[ -z "$all_env_vars" ]] && return 0
+
+    echo "$all_env_vars" | while read -r var; do
+        [[ -z "$var" ]] && continue
+        echo "export $var=\"\${${var}:-}\""
     done
 }
 
@@ -262,27 +184,46 @@ print_vars() {
 # Main
 ################################################################################
 
-case "${1:-config}" in
+case "${1:-help}" in
     --print-help)
-        generate_help
+        generate_help_yaml
+        generate_vars_yaml
         ;;
-    --print-vars)
-        print_vars
+    --print-vars-shell)
+        generate_vars_shell
         ;;
     --help|-h)
-        cat << 'EOF'
+        cat << 'HELP_TEXT'
 Tool Discovery System
-Usage: discover.sh [--print-help | --print-config | --print-vars | --help]
+Usage: discover.sh [--print-help | --print-vars-shell | --help]
 
-  --print-help      Show formatted help for pipeline with all tools and options
-  --print-config    Show configuration template with all environment variables
-  --print-vars      Print discovered tool variables (for sourcing)
-  --help, -h        Show this help message
+MODES:
+  --print-help           Generate YAML help for pipeline with auto-discovered tools
+                         and their help text (copied as-is, not parsed)
 
-Examples:
+  --print-vars-shell     Generate shell-compatible export statements
+                         (for sourcing in bash scripts)
+
+  --help, -h             Show this help message
+
+FEATURES:
+  - Auto-discovers COLMAP tools by running 'colmap --help'
+  - Auto-discovers OpenMVS tools by scanning /usr/local/bin/OpenMVS
+  - Copies tool help output verbatim without parsing
+  - Discovers environment variables from stage files only
+  - Links environment variables to tools based on stage file mentions
+  - Generates machine-readable YAML output
+
+EXAMPLES:
+  # View auto-discovered pipeline configuration
   ./discover.sh --print-help
-  ./discover.sh --print-config > new_config.sh
-  eval $(./discover.sh --print-vars)
-EOF
+
+  # Source environment variables with defaults
+  eval "$(./discover.sh --print-vars-shell)"
+
+HELP_TEXT
+        ;;
+    *)
+        "$0" --help
         ;;
 esac

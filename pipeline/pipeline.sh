@@ -11,6 +11,7 @@
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+STAGES_DIR="${SCRIPT_DIR}/stages"
 
 ################################################################################
 # Help function - Delegates to discovery system (unified, no duplication)
@@ -32,7 +33,6 @@ done
 
 WORK_DIR="${1:-.}"
 IMAGES_DIR="${WORK_DIR}/images"
-STAGES_DIR="${SCRIPT_DIR}/stages"
 LOGS_DIR="${WORK_DIR}/pipeline/logs"
 STAGES_MARKER_DIR="${WORK_DIR}/pipeline/stages"
 
@@ -105,7 +105,7 @@ if [[ $DRY_RUN == 1 ]]; then log "DRY-RUN mode"; fi
 
 # Auto-eval discovered variables to ensure all tools are set
 log_dbg "Discovering config..."
-eval "$(${SCRIPT_DIR}/discover.sh --print-vars)" || { log_err "Failed to discover tools"; exit 1; }
+eval "$(${SCRIPT_DIR}/discover.sh --print-vars-shell)" || { log_err "Failed to discover tools"; exit 1; }
 
 ################################################################################
 # Helper functions
