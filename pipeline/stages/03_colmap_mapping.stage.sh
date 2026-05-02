@@ -6,7 +6,7 @@ OUTPUTS=("${WORK_DIR}/colmap/sparse/0/cameras.bin")
 run_stage_function() {
     cd "${WORK_DIR}/colmap"
     mkdir -p sparse
-    colmap ${COLMAP_MAPPER} \
+    colmap ${COLMAP_MAPPER:-global_mapper} \
         --image_path "${IMAGES_DIR}" \
         --database_path database.db \
         --output_path sparse \
