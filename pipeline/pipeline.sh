@@ -5,7 +5,7 @@
 #
 # Caching logic: A stage runs IFF:
 #   1. Any output is missing, OR
-#   2. Inputs/outputs hash has changed (quick hash of paths, sizes, mtimes)
+#   2. Input hash has changed (quick hash of input paths, sizes, mtimes)
 ################################################################################
 
 set -euo pipefail
@@ -14,7 +14,7 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 STAGES_DIR="${SCRIPT_DIR}/stages"
 
 ################################################################################
-# Parse arguments at global scope (needed for LOG_FILE)
+# Parse arguments at global scope
 ################################################################################
 
 # Early exit for --help and --print-vars
@@ -39,7 +39,6 @@ shift || true
 
 IMAGES_DIR="${WORK_DIR}/images"
 PIPELINE_DIR="${WORK_DIR}/pipeline"
-LOG_FILE="$PIPELINE_DIR/pipeline.log"
 
 # Parse options
 VERBOSE=0
@@ -57,6 +56,11 @@ while [[ $# -gt 0 ]]; do
     esac
 done
 
+# Validate WORK_DIR before creating PIPELINE_DIR
+if [[ ! -d "$WORK_DIR" ]]; then
+    echo "Directory not found: $WORK_DIR" >&2
+    exit 1
+fi
 mkdir -p "$PIPELINE_DIR"
 
 ################################################################################
@@ -172,7 +176,9 @@ main() {
     }
 
     cleanup_openmvs_logs() {
-        find "$WORK_DIR" -name "*.log" -type f ! -path "$PIPELINE_DIR/*" -delete 2>/dev/null || true
+        local openmvs_dir="${WORK_DIR}/openmvs"
+        [[ -d "$openmvs_dir" ]] || return 0
+        find "$openmvs_dir" -type f -name "*.log" -delete 2>/dev/null || true
     }
 
     run_stage() {
@@ -183,16 +189,11 @@ main() {
         fi
     }
 
-    if [[ ! -d "$WORK_DIR" ]]; then
-        log_err "Directory not found: $WORK_DIR"
-        exit 1
-    fi
     if [[ ! -d "$WORK_DIR/images" ]]; then
         log_err "No images/ directory in: $WORK_DIR"
         exit 1
     fi
 
-    mkdir -p "$PIPELINE_DIR" || { log_err "Failed to create pipeline directory: $PIPELINE_DIR"; exit 1; }
     rm -rf "${WORK_DIR}/pipeline/stages" 2>/dev/null || true
 
     log_group "file=pipeline.sh,section=config" "Config"
@@ -311,7 +312,7 @@ main() {
             if [[ $VERBOSE == 1 ]]; then
                 log_err "Check log for details"
             else
-                log_err "See $LOG_FILE for details"
+                log_err "See ${PIPELINE_DIR}/stage_${stage_name}.log for details"
             fi
             rm -f "$stage_log"
             exit 1
@@ -361,7 +362,9 @@ for display_name in "${stage_display_names[@]}"; do
 done
 echo ""
 
-# Run main, tee output to log file, capture exit code
-main 2>&1 | tee "$LOG_FILE" || true
-exit_code=${PIPESTATUS[0]}
+# Run main, capture exit code
+set +e
+main
+exit_code=$?
+set -e
 exit $exit_code
