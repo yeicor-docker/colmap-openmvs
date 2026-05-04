@@ -78,7 +78,7 @@ main() {
         echo "::endgroup::"
     }
 
-    # Logging functions (output to stdout, which gets teed to log file)
+    # Logging functions (output to stdout; per-stage output is captured to stage log files)
     log()     { echo "[$(date '+%H:%M:%S')] • $*"; }
     log_ok()  { echo "[$(date '+%H:%M:%S')] ✓ $*"; }
     log_err() { echo "[$(date '+%H:%M:%S')] ✗ $*" >&2; }
@@ -312,9 +312,8 @@ main() {
             if [[ $VERBOSE == 1 ]]; then
                 log_err "Check log for details"
             else
-                log_err "See ${PIPELINE_DIR}/stage_${stage_name}.log for details"
+                log_err "See $stage_log for details"
             fi
-            rm -f "$stage_log"
             exit 1
         fi
 
@@ -327,7 +326,7 @@ main() {
         done
 
         if [[ $missing == 1 ]]; then
-            rm -f "$stage_log"
+            log_err "See $stage_log for details"
             exit 1
         fi
 
@@ -362,9 +361,8 @@ for display_name in "${stage_display_names[@]}"; do
 done
 echo ""
 
-# Run main, capture exit code
-set +e
-main
-exit_code=$?
-set -e
+# Run main; keep set -e active so failures inside main are not silently swallowed.
+# Capture exit code without disabling errexit by using the ||  pattern.
+exit_code=0
+main || exit_code=$?
 exit $exit_code
