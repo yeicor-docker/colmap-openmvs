@@ -30,14 +30,15 @@ OPTIONS:
   --help-entrypoint     Show this help
   -h, --help            Show pipeline help (much more detailed)
   -v, --verbose         Verbose output
-  --dry-run             Simulate without executing
+  --last-run-logs       Print logs from last run and exit
   --force STAGES        Force re-run stages (comma-separated)
   --skip STAGES         Skip stages (comma-separated)
   --print-vars          Print configurable environment variables and exit
 
 EXAMPLES:
   entrypoint /data
-  entrypoint -v --dry-run /data
+  entrypoint -v /data
+  entrypoint --last-run-logs /data
   entrypoint --skip 04_colmap_undistortion /data
 EOF
     exit 0
@@ -56,7 +57,7 @@ while [[ $# -gt 0 ]]; do
             OPTIONS+=("$1" "$2")
             shift 2
             ;;
-        -v|--verbose|--dry-run)
+        -v|--verbose|--last-run-logs)
             OPTIONS+=("$1")
             shift
             ;;

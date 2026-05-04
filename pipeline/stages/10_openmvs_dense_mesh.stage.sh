@@ -1,4 +1,5 @@
 #!/usr/bin/env bash
+DISPLAY_NAME="OpenMVS Dense Mesh"
 DEPENDENCIES=("09_openmvs_densify")
 INPUTS=("${WORK_DIR}/openmvs/scene_dense.mvs")
 OUTPUTS=("${WORK_DIR}/openmvs/scene_dense_mesh.ply")
