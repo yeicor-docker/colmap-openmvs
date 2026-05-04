@@ -1,4 +1,5 @@
 #!/usr/bin/env bash
+DISPLAY_NAME="OpenMVS Sparse Texture"
 DEPENDENCIES=("07_openmvs_sparse_refine")
 INPUTS=("${WORK_DIR}/openmvs/scene.mvs" "${WORK_DIR}/openmvs/scene_mesh_refined.ply")
 OUTPUTS=("${WORK_DIR}/openmvs/scene_mesh_refined_textured.ply")

@@ -37,7 +37,8 @@ OPTIONS:
 
 EXAMPLES:
   entrypoint /data
-  entrypoint -v --dry-run /data
+  entrypoint -v /data
+  entrypoint --dry-run /data
   entrypoint --skip 04_colmap_undistortion /data
 EOF
     exit 0

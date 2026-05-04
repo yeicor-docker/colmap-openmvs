@@ -1,4 +1,5 @@
 #!/usr/bin/env bash
+DISPLAY_NAME="COLMAP Feature Matching"
 DEPENDENCIES=("01_colmap_feature_extraction")
 INPUTS=("${WORK_DIR}/colmap/database.db")
 OUTPUTS=("${WORK_DIR}/colmap/database.db.matches")

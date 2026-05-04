@@ -1,4 +1,5 @@
 #!/usr/bin/env bash
+DISPLAY_NAME="COLMAP Feature Extraction"
 DEPENDENCIES=()
 INPUTS=("${IMAGES_DIR}")
 OUTPUTS=("${WORK_DIR}/colmap/database.db")
