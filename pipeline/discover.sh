@@ -146,6 +146,25 @@ find_env_vars_for_tool() {
 }
 
 ################################################################################
+# Custom help text for specific environment variables
+################################################################################
+
+get_custom_var_help() {
+    local var="$1"
+    case "$var" in
+        COLMAP_MAPPER)
+            echo "Selects COLMAP mapper algorithm. Options: mapper (alias), global_mapper (default, recommended)."
+            ;;
+        COLMAP_MATCHER)
+            echo "Selects COLMAP feature matcher. Options: exhaustive_matcher, sequential_matcher, spatial_matcher, transitive_matcher, vocab_tree_matcher (default)."
+            ;;
+        *)
+            return 1
+            ;;
+    esac
+}
+
+################################################################################
 # Output a single tool entry in YAML format
 ################################################################################
 
@@ -171,6 +190,21 @@ output_tool_entry() {
 }
 
 ################################################################################
+# Output custom (virtual) tool entries
+################################################################################
+
+output_custom_colmap_tool_entries() {
+    echo "    colmap_mapper:"
+    echo "      help: $(yaml_escape "Selects COLMAP mapper algorithm. Options: mapper (the old version), global_mapper (default, recommended).")"
+    echo "      environment_variables:"
+    echo "        - COLMAP_MAPPER"
+    echo "    colmap_matcher:"
+    echo "      help: $(yaml_escape "Selects COLMAP feature matcher. Options: exhaustive_matcher, sequential_matcher, spatial_matcher, transitive_matcher, vocab_tree_matcher (default).")"
+    echo "      environment_variables:"
+    echo "        - COLMAP_MATCHER"
+}
+
+################################################################################
 # Generate YAML help from discovered tools
 ################################################################################
 
@@ -188,6 +222,8 @@ YAML_START
         [[ -z "$tool" ]] && continue
         output_tool_entry "$tool"
     done <<< "$colmap_tools"
+    # Inject custom pseudo-tools
+    output_custom_colmap_tool_entries
 
     echo "  openmvs:"
 
