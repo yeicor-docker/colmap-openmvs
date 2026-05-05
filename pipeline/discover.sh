@@ -67,6 +67,57 @@ discover_openmvs_tools() {
 }
 
 ################################################################################
+# Track and clean .log files created during tool runs
+################################################################################
+
+LOG_SNAPSHOT_BEFORE=""
+LOG_SNAPSHOT_AFTER=""
+
+snapshot_logs_before() {
+    LOG_SNAPSHOT_BEFORE="$(mktemp)"
+    find . -maxdepth 1 -type f -name "*.log" -printf "%f\n" | sort > "$LOG_SNAPSHOT_BEFORE"
+}
+
+snapshot_logs_after() {
+    LOG_SNAPSHOT_AFTER="$(mktemp)"
+    find . -maxdepth 1 -type f -name "*.log" -printf "%f\n" | sort > "$LOG_SNAPSHOT_AFTER"
+}
+
+cleanup_new_logs() {
+    local dry_run="${1:-false}"
+
+    [[ -f "$LOG_SNAPSHOT_BEFORE" && -f "$LOG_SNAPSHOT_AFTER" ]] || return 0
+
+    comm -13 "$LOG_SNAPSHOT_BEFORE" "$LOG_SNAPSHOT_AFTER" | while read -r file; do
+        [[ -z "$file" ]] && continue
+
+        if [[ "$dry_run" == "true" ]]; then
+            echo "[DRY-RUN] Would remove: $file"
+        else
+            echo "Removing: $file"
+            rm -f -- "$file"
+        fi
+    done
+
+    rm -f "$LOG_SNAPSHOT_BEFORE" "$LOG_SNAPSHOT_AFTER"
+    LOG_SNAPSHOT_BEFORE=""
+    LOG_SNAPSHOT_AFTER=""
+}
+
+################################################################################
+# Run OpenMVS tool with automatic log cleanup
+################################################################################
+
+run_openmvs_tool() {
+    snapshot_logs_before
+
+    "$@"
+
+    snapshot_logs_after
+    cleanup_new_logs
+}
+
+################################################################################
 # Get help text for a tool
 ################################################################################
 
@@ -75,7 +126,7 @@ get_tool_help() {
     if [[ -z "$tool_path" ]]; then
         colmap "$tool" --help 2>&1 | grep -v 'option_manager.cc' || echo ""
     else
-        "$tool_path" --help 2>&1 | grep -v '\[App' || echo ""
+        run_openmvs_tool "$tool_path" --help 2>&1 | grep -v '\[App' || echo ""
     fi
 }
 
@@ -92,6 +143,25 @@ find_env_vars_for_tool() {
     mapfile -t check_files <<< "$check_file"
     grep -h -oP '\$\{[A-Z_][A-Z0-9_]*_ARGS\}' "${check_files[@]}" 2>/dev/null | \
         sed 's/[${}]//g' | sort -u || true
+}
+
+################################################################################
+# Custom help text for specific environment variables
+################################################################################
+
+get_custom_var_help() {
+    local var="$1"
+    case "$var" in
+        COLMAP_MAPPER)
+            echo "Selects COLMAP mapper algorithm. Options: mapper (alias), global_mapper (default, recommended)."
+            ;;
+        COLMAP_MATCHER)
+            echo "Selects COLMAP feature matcher. Options: exhaustive_matcher, sequential_matcher, spatial_matcher, transitive_matcher, vocab_tree_matcher (default)."
+            ;;
+        *)
+            return 1
+            ;;
+    esac
 }
 
 ################################################################################
@@ -120,6 +190,21 @@ output_tool_entry() {
 }
 
 ################################################################################
+# Output custom (virtual) tool entries
+################################################################################
+
+output_custom_colmap_tool_entries() {
+    echo "    colmap_mapper:"
+    echo "      help: $(yaml_escape "Selects COLMAP mapper algorithm. Options: mapper (the old version), global_mapper (default, recommended).")"
+    echo "      environment_variables:"
+    echo "        - COLMAP_MAPPER"
+    echo "    colmap_matcher:"
+    echo "      help: $(yaml_escape "Selects COLMAP feature matcher. Options: exhaustive_matcher, sequential_matcher, spatial_matcher, transitive_matcher, vocab_tree_matcher (default).")"
+    echo "      environment_variables:"
+    echo "        - COLMAP_MATCHER"
+}
+
+################################################################################
 # Generate YAML help from discovered tools
 ################################################################################
 
@@ -137,6 +222,8 @@ YAML_START
         [[ -z "$tool" ]] && continue
         output_tool_entry "$tool"
     done <<< "$colmap_tools"
+    # Inject custom pseudo-tools
+    output_custom_colmap_tool_entries
 
     echo "  openmvs:"
 
@@ -163,8 +250,7 @@ VARS_START
 
     echo "$all_env_vars" | while read -r var; do
         [[ -z "$var" ]] && continue
-        echo "  $var:"
-        echo "    type: string"
+        echo "  - $var"
     done
 }
 
