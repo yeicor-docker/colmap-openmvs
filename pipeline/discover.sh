@@ -67,6 +67,57 @@ discover_openmvs_tools() {
 }
 
 ################################################################################
+# Track and clean .log files created during tool runs
+################################################################################
+
+LOG_SNAPSHOT_BEFORE=""
+LOG_SNAPSHOT_AFTER=""
+
+snapshot_logs_before() {
+    LOG_SNAPSHOT_BEFORE="$(mktemp)"
+    find . -maxdepth 1 -type f -name "*.log" -printf "%f\n" | sort > "$LOG_SNAPSHOT_BEFORE"
+}
+
+snapshot_logs_after() {
+    LOG_SNAPSHOT_AFTER="$(mktemp)"
+    find . -maxdepth 1 -type f -name "*.log" -printf "%f\n" | sort > "$LOG_SNAPSHOT_AFTER"
+}
+
+cleanup_new_logs() {
+    local dry_run="${1:-false}"
+
+    [[ -f "$LOG_SNAPSHOT_BEFORE" && -f "$LOG_SNAPSHOT_AFTER" ]] || return 0
+
+    comm -13 "$LOG_SNAPSHOT_BEFORE" "$LOG_SNAPSHOT_AFTER" | while read -r file; do
+        [[ -z "$file" ]] && continue
+
+        if [[ "$dry_run" == "true" ]]; then
+            echo "[DRY-RUN] Would remove: $file"
+        else
+            echo "Removing: $file"
+            rm -f -- "$file"
+        fi
+    done
+
+    rm -f "$LOG_SNAPSHOT_BEFORE" "$LOG_SNAPSHOT_AFTER"
+    LOG_SNAPSHOT_BEFORE=""
+    LOG_SNAPSHOT_AFTER=""
+}
+
+################################################################################
+# Run OpenMVS tool with automatic log cleanup
+################################################################################
+
+run_openmvs_tool() {
+    snapshot_logs_before
+
+    "$@"
+
+    snapshot_logs_after
+    cleanup_new_logs
+}
+
+################################################################################
 # Get help text for a tool
 ################################################################################
 
@@ -75,7 +126,7 @@ get_tool_help() {
     if [[ -z "$tool_path" ]]; then
         colmap "$tool" --help 2>&1 | grep -v 'option_manager.cc' || echo ""
     else
-        "$tool_path" --help 2>&1 | grep -v '\[App' || echo ""
+        run_openmvs_tool "$tool_path" --help 2>&1 | grep -v '\[App' || echo ""
     fi
 }
 
