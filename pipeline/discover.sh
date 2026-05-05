@@ -163,8 +163,7 @@ VARS_START
 
     echo "$all_env_vars" | while read -r var; do
         [[ -z "$var" ]] && continue
-        echo "  $var:"
-        echo "    type: string"
+        echo "  - $var"
     done
 }
 
