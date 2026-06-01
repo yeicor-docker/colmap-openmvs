@@ -44,7 +44,7 @@ PIPELINE_DIR="${WORK_DIR}/pipeline"
 VERBOSE=0
 FORCE_STAGES=""
 SKIP_STAGES=""
-DRY_RUN=0
+: "${DRY_RUN:=0}"
 
 while [[ $# -gt 0 ]]; do
     case "$1" in
@@ -68,6 +68,7 @@ mkdir -p "$PIPELINE_DIR"
 ################################################################################
 
 main() {
+    trap 'cleanup_openmvs_logs || true' EXIT
     # GitHub-style group annotations for machine-parseable log output
     log_group() {
         local params="$1"
@@ -138,6 +139,16 @@ main() {
         local stage=$1
         echo ",$FORCE_STAGES," | grep -qF ",$stage," && return 0 || true
         return 1
+    }
+
+    dependencies_satisfied() {
+        local dep
+        for dep in "${DEPENDENCIES[@]:-}"; do
+            local dep_hash
+            dep_hash=$(stage_hash_path "$dep")
+            [[ -f "$dep_hash" ]] || return 1
+        done
+        return 0
     }
 
     outputs_stale() {
@@ -249,6 +260,9 @@ main() {
         elif is_skipped "$stage_name"; then
             stage_status="skipped"
             skip_stage=1
+        elif ! dependencies_satisfied; then
+            stale_reason="dependency_missing"
+            stage_status="run"
         elif stale_reason=$(outputs_stale "$stage_name" "${INPUTS[*]:-}" "${OUTPUTS[*]:-}"); then
             # outputs_stale returns 0 (true) if stale/has reason, 1 (false) if fresh
             stage_status="run"
@@ -331,7 +345,7 @@ main() {
         fi
 
         # Save hash of inputs only (matches what outputs_stale checks)
-        current_hash=$(stage_compute_hash "$stage_name" "${INPUTS[@]:-}")
+        current_hash=$(stage_compute_hash "$stage_name" "${INPUTS[@]:-}" "$CONFIG_FILE" "$stage_file")
         stage_save_hash "$stage_name" "$current_hash"
 
         cleanup_openmvs_logs
