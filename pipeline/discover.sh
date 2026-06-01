@@ -29,14 +29,14 @@ yaml_escape() {
 
 discover_env_vars_from_stages() {
     [[ -d "$STAGES_DIR" ]] || return 0
-    for stage_file in $(ls "$STAGES_DIR"/*.stage.sh 2>/dev/null | sort); do
+    while IFS= read -r stage_file; do
         grep -h -oP '\$\{[A-Z_][A-Z0-9_]*(:-[^}]*)?\}' "$stage_file" | \
             sed -E 's/\$\{([A-Z_][A-Z0-9_]*)(:-[^}]*)?\}/\1/g' | sort -u | \
             while read -r var; do
                 [[ "$var" =~ IMAGES_DIR|WORK_DIR ]] && continue  # Skip core path variables
                 echo "$var"
             done
-    done || true
+    done < <(find "$STAGES_DIR" -maxdepth 1 -name "*.stage.sh" | sort) || true
 }
 
 ################################################################################
