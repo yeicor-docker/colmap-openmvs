@@ -246,7 +246,7 @@ jobs:
 
   success: # For auto-merging rules
     needs: test
-    if: always()
+    if: "!cancelled()"
     runs-on: ubuntu-24.04
     steps:
       - name: Check dependency status
@@ -254,3 +254,20 @@ jobs:
         run: |
           echo "Required tests did not succeed (status: ${{ needs.test.result }})"
           exit 1
+
+  # Certain jobs may fail due to rate limits or compiler bugs; automatically retry failed jobs
+  retry-on-failure:
+    needs:
+      - success
+    if: "!cancelled() && contains(needs.*.result, 'failure') && fromJSON(github.run_attempt) < 5"
+    runs-on: ubuntu-24.04
+    permissions:
+      actions: write
+    steps:
+      - env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+        run: |
+          set -ex
+          sleep $((RANDOM % 120 + 10))
+          gh workflow run retry-workflow.yml -F run_id=${{ github.run_id }}
