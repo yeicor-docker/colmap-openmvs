@@ -176,7 +176,7 @@ main() {
 
         # Only hash inputs to check if we need to re-run
         # Outputs are hashed and saved after successful run
-        local current_hash=$(stage_compute_hash "$stage" "${inputs[@]}")
+        local current_hash=$(stage_compute_hash "$stage" "${inputs[@]}" "$CONFIG_FILE" "$stage_file")
         local stored_hash=$(stage_get_hash "$stage")
 
         if [[ -z "$stored_hash" ]] || [[ "$current_hash" != "$stored_hash" ]]; then
