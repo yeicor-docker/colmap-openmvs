@@ -2,6 +2,8 @@
 
 A robust, production-ready photogrammetry pipeline combining [COLMAP](https://github.com/colmap/colmap) and [OpenMVS](https://github.com/cdcseacave/openMVS), containerized for reproducibility and ease of use. Supports both CPU-only and CUDA-accelerated environments: run the full pipeline on any machine, or leverage GPU acceleration for faster processing when available.
 
+If you just want an easy-to-use cross-platform app, see [colmap-openmvs-app](https://github.com/yeicor/colmap-openmvs-app/).
+
 ## Features
 
 - **End-to-End Photogrammetry**: From unordered images to textured 3D meshes, fully automated.
@@ -28,7 +30,7 @@ Place your images in a directory with a subfolder called `images/`:
 
 2. **(Optional) Add a custom config**  
 
-You can create a `config.sh` file in your data directory to override environment variables and fine-tune the pipeline.
+You can create a `config.sh` file in the `/your/data/path/` directory to override environment variables and fine-tune the pipeline.
 
 To see all available options and configuration variables:
 ```sh
