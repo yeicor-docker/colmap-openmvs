@@ -261,7 +261,8 @@ COPY pipeline /pipeline
 
 WORKDIR /
 
-ENV PATH=/usr/local/bin:/usr/local/bin/OpenMVS:$PATH \
+ENV HOME=/tmp \
+    PATH=/usr/local/bin:/usr/local/bin/OpenMVS:$PATH \
     LD_LIBRARY_PATH=/usr/local/lib:/usr/local/cuda/compat
 
 LABEL org.opencontainers.image.title="colmap-openmvs" \
