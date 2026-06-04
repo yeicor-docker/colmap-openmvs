@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 DISPLAY_NAME="COLMAP Mapping"
 DEPENDENCIES=("02_colmap_feature_matching")
-INPUTS=("${WORK_DIR}/colmap/database.db" "${WORK_DIR}/colmap/database.db.matches")
+INPUTS=("${WORK_DIR}/colmap/.feature_matching.done" "${WORK_DIR}/colmap/database.db")
 OUTPUTS=("${WORK_DIR}/colmap/sparse/0/cameras.bin")
 
 run_stage_function() {

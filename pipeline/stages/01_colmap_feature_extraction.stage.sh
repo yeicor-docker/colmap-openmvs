@@ -2,7 +2,7 @@
 DISPLAY_NAME="COLMAP Feature Extraction"
 DEPENDENCIES=()
 INPUTS=("${IMAGES_DIR}")
-OUTPUTS=("${WORK_DIR}/colmap/database.db")
+OUTPUTS=("${WORK_DIR}/colmap/.feature_extraction.done") # It cannot be database.db as stage 2 also modifies it
 
 run_stage_function() {
     cd "${WORK_DIR}"
@@ -11,4 +11,5 @@ run_stage_function() {
         --image_path "${IMAGES_DIR}" \
         --database_path database.db \
         ${COLMAP_FEATURE_EXTRACTOR_ARGS}
+    touch .feature_extraction.done
 }
