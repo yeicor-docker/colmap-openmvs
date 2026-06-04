@@ -259,16 +259,9 @@ COPY --from=builder /build/install/lib /usr/local/lib
 COPY entrypoint.sh /entrypoint.sh
 COPY pipeline /pipeline
 
-RUN set -eux; \
-    mkdir -p /home/user; \
-    chmod 777 /home/user
+WORKDIR /
 
-WORKDIR /home/user
-
-ENV HOME=/home/user \
-    USER=user \
-    LOGNAME=user \
-    SHELL=/bin/bash \
+ENV HOME=/tmp \
     PATH=/usr/local/bin:/usr/local/bin/OpenMVS:$PATH \
     LD_LIBRARY_PATH=/usr/local/lib:/usr/local/cuda/compat
 
