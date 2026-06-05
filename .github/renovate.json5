@@ -33,7 +33,7 @@
         "(?:mirror\\.gcr\\.io/)?nvidia/cuda:[\\d.]+-(?:devel|runtime)-(?<depName>ubuntu)(?<currentValue>[\\d.]+)",
       ],
       "datasourceTemplate": "docker"
-    },
+    }
     /*{ // DO NOT UPDATE CUDA TO KEEP BEING COMPATIBLE WITH OLDER SYSTEMS
       "customType": "regex",
       "description": "Update NVIDIA CUDA Docker images in GitHub Actions workflows",
