@@ -30,10 +30,11 @@
       "matchStrings": [
         "BASE_IMAGE:\\s+mirror\\.gcr\\.io/library/(?<depName>ubuntu):(?<currentValue>\\d+\\.\\d+)",
         "RUNTIME_IMAGE:\\s+mirror\\.gcr\\.io/library/(?<depName>ubuntu):(?<currentValue>\\d+\\.\\d+)"
+        "(?:mirror\\.gcr\\.io/)?nvidia/cuda:[\\d.]+-(?:devel|runtime)-(?<depName>ubuntu)(?<currentValue>[\\d.]+)",
       ],
       "datasourceTemplate": "docker"
-    },
-    {
+    }
+    /*{ // DO NOT UPDATE CUDA TO KEEP BEING COMPATIBLE WITH OLDER SYSTEMS
       "customType": "regex",
       "description": "Update NVIDIA CUDA Docker images in GitHub Actions workflows",
       "managerFilePatterns": [
@@ -43,9 +44,9 @@
         "(?:mirror\\.gcr\\.io/)?(?<depName>nvidia/cuda):(?<currentValue>[\\d.]+-(?:devel|runtime)-ubuntu[\\d.]+)",
       ],
       "datasourceTemplate": "docker"
-    }
+    }*/
   ],
-  "packageRules": [
+  /*"packageRules": [
     {
       "matchPackageNames": ["nvidia/cuda"],
       "matchCurrentValue": "/^[\\d.]+-devel-ubuntu[\\d.]+$/",
@@ -56,5 +57,5 @@
       "matchCurrentValue": "/^[\\d.]+-runtime-ubuntu[\\d.]+$/",
       "allowedVersions": "/^[\\d.]+-runtime-ubuntu[\\d.]+$/"
     }
-  ]
+  ]*/
 }
