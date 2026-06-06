@@ -142,8 +142,13 @@ main() {
     }
 
     dependencies_satisfied() {
+        # Avoid bash 4.4+ pitfall where ${array[@]:-} on an empty array
+        # expands to one empty string element
+        if [[ ${#DEPENDENCIES[@]} -eq 0 ]]; then
+            return 0
+        fi
         local dep
-        for dep in "${DEPENDENCIES[@]:-}"; do
+        for dep in "${DEPENDENCIES[@]}"; do
             local dep_hash
             dep_hash=$(stage_hash_path "$dep")
             [[ -f "$dep_hash" ]] || return 1
@@ -238,7 +243,7 @@ main() {
 
     # Now handle stale reasons inside the group for each stage
     stage_count=0
-    
+
     for stage_file in "${stages[@]}"; do
         stage_name=$(basename "$stage_file" .stage.sh)
         ((stage_count++))
