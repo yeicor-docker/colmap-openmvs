@@ -191,6 +191,42 @@ main() {
         return 1
     }
 
+    # Compact cache state debug line shown for every stage
+    debug_cache_state() {
+        local deps_info="deps:${#DEPENDENCIES[@]}"
+        if [[ ${#DEPENDENCIES[@]} -gt 0 ]]; then
+            local deps_ok=0 dep dep_h
+            for dep in "${DEPENDENCIES[@]}"; do
+                dep_h=$(stage_hash_path "$dep")
+                [[ -f "$dep_h" ]] && ((deps_ok++))
+            done
+            deps_info="${deps_info} ok:${deps_ok}/${#DEPENDENCIES[@]}"
+        fi
+
+        local input_info="" inp
+        for inp in "${INPUTS[@]}"; do
+            input_info="${input_info} $(hash_path "$inp")"
+        done
+        [[ -n "$input_info" ]] && input_info=" inputs=[${input_info:1}]"
+
+        local output_info="" out
+        for out in "${OUTPUTS[@]}"; do
+            if [[ -e "$out" ]]; then
+                output_info="${output_info} ✓"
+            else
+                output_info="${output_info} ✗"
+            fi
+        done
+        [[ -n "$output_info" ]] && output_info=" outputs=[${output_info:1}]"
+
+        local combined_hash=""
+        combined_hash=$(stage_compute_hash "$stage_name" "${INPUTS[@]}" "$CONFIG_FILE" "$stage_file")
+        local stored_hash
+        stored_hash=$(stage_get_hash "$stage_name")
+
+        log "${deps_info}${input_info}${output_info} | stored=${stored_hash:-∅} current=${combined_hash}"
+    }
+
     cleanup_openmvs_logs() {
         local openmvs_dir="${WORK_DIR}/openmvs"
         [[ -d "$openmvs_dir" ]] || return 0
@@ -279,6 +315,7 @@ main() {
         # Open group and log inside it with type and count
         local display_name="${DISPLAY_NAME:-$stage_name}"
         log_group "file=${stage_file},type=stage,status=${stage_status},count=${stage_count}/${#stages[@]}" "$display_name"
+        debug_cache_state
 
         if [[ $skip_stage == 1 ]]; then
             log "Stage $stage_name: skipped (--skip)"
