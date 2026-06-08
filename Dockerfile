@@ -263,7 +263,7 @@ WORKDIR /
 
 ENV HOME=/tmp \
     PATH=/usr/local/bin:/usr/local/bin/OpenMVS:$PATH \
-    LD_LIBRARY_PATH=/usr/local/lib:/usr/local/cuda/compat
+    LD_LIBRARY_PATH=/usr/local/lib
 
 LABEL org.opencontainers.image.title="colmap-openmvs" \
       org.opencontainers.image.description="COLMAP + OpenMVS: SfM and MVS pipeline" \
