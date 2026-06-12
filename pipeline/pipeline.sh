@@ -238,7 +238,7 @@ main() {
 
     # Now handle stale reasons inside the group for each stage
     stage_count=0
-    
+
     for stage_file in "${stages[@]}"; do
         stage_name=$(basename "$stage_file" .stage.sh)
         ((stage_count++))

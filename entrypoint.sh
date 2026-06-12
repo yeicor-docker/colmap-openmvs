@@ -28,7 +28,7 @@ ARGUMENTS:
 
 OPTIONS:
   --help-entrypoint     Show this help
-  -h, --help            Show pipeline help (much more detailed)
+  -h, --help            Show pipeline help (environment variables with docs)
   -v, --verbose         Verbose output
   --dry-run             Simulate without executing
   --force STAGES        Force re-run stages (comma-separated)
