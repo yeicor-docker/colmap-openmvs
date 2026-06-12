@@ -1,7 +1,9 @@
 #!/usr/bin/env bash
 ################################################################################
-# Tool Discovery System - Auto-discovers COLMAP and OpenMVS tools
-# Dynamically generates YAML configuration from installed tools and stage files
+# Tool Discovery System - Maps env vars to COLMAP/OpenMVS tool help text
+# Dynamically generates YAML documentation from installed tools and stage files.
+# Each environment variable links directly to the --help output of the command
+# it configures.
 # Usage: ./discover.sh [--print-help | --print-vars-shell | --help]
 ################################################################################
 
@@ -12,7 +14,7 @@ STAGES_DIR="${SCRIPT_DIR}/stages"
 OPENMVS_BIN_DIR="/usr/local/bin/OpenMVS"
 
 ################################################################################
-# YAML safe string escaping
+# YAML safe string escaping (for single-line strings)
 ################################################################################
 
 yaml_escape() {
@@ -24,7 +26,32 @@ yaml_escape() {
 }
 
 ################################################################################
-# Discover environment variables from stage files
+# YAML literal block scalar (preserves formatting for multi-line strings)
+################################################################################
+
+yaml_block_scalar() {
+    local str="$1"
+    local indent="${2:-6}"
+    local indent_str
+    printf -v indent_str '%*s' "$indent" ''
+
+    if [[ -z "$str" ]]; then
+        echo "~"
+        return
+    fi
+
+    if [[ "$str" == *$'\n'* ]]; then
+        echo "|"
+        while IFS= read -r line; do
+            echo "${indent_str}${line}"
+        done <<< "$str"
+    else
+        yaml_escape "$str"
+    fi
+}
+
+################################################################################
+# Discover environment variables from stage files (source of truth)
 ################################################################################
 
 discover_env_vars_from_stages() {
@@ -110,9 +137,7 @@ cleanup_new_logs() {
 
 run_openmvs_tool() {
     snapshot_logs_before
-
     "$@"
-
     snapshot_logs_after
     cleanup_new_logs
 }
@@ -132,6 +157,8 @@ get_tool_help() {
 
 ################################################################################
 # Find environment variables used for a tool in stage files
+# Only matches _ARGS variables (the actual tool-argument env vars). The special
+# selector variables (COLMAP_MAPPER, COLMAP_MATCHER) are handled separately.
 ################################################################################
 
 find_env_vars_for_tool() {
@@ -146,7 +173,9 @@ find_env_vars_for_tool() {
 }
 
 ################################################################################
-# Custom help text for specific environment variables
+# Custom help text for env vars that don't map to a tool --help
+# These are selector variables (e.g. COLMAP_MAPPER, COLMAP_MATCHER) that choose
+# which subcommand to run rather than passing arguments to one.
 ################################################################################
 
 get_custom_var_help() {
@@ -165,93 +194,102 @@ get_custom_var_help() {
 }
 
 ################################################################################
-# Output a single tool entry in YAML format
+# Build the env-var → tool-command mapping from auto-discovered tools and
+# stage-file associations.  Returns lines:  <VAR> <type> <tool>
+# where <type> is "colmap" or "openmvs".
 ################################################################################
 
-output_tool_entry() {
-    local tool="$1" tool_path="${2:-}"
-    local help_text tool_env_vars
-
-    help_text=$(get_tool_help "$tool" "$tool_path" 2>/dev/null || echo "")
-    tool_env_vars=$(find_env_vars_for_tool "$tool")
-
-    echo "    $tool:"
-    echo "      help: $(yaml_escape "$help_text")"
-
-    if [[ -n "$tool_env_vars" ]]; then
-        echo "      environment_variables:"
-        echo "$tool_env_vars" | while read -r var; do
-            [[ -z "$var" ]] && continue
-            echo "        - $var"
-        done
-    else
-        echo "      environment_variables: []"
-    fi
-}
-
-################################################################################
-# Output custom (virtual) tool entries
-################################################################################
-
-output_custom_colmap_tool_entries() {
-    echo "    colmap_mapper:"
-    echo "      help: $(yaml_escape "Selects COLMAP mapper algorithm. Options: mapper (the old version), global_mapper (default, recommended).")"
-    echo "      environment_variables:"
-    echo "        - COLMAP_MAPPER"
-    echo "    colmap_matcher:"
-    echo "      help: $(yaml_escape "Selects COLMAP feature matcher. Options: exhaustive_matcher, sequential_matcher, spatial_matcher, transitive_matcher, vocab_tree_matcher (default).")"
-    echo "      environment_variables:"
-    echo "        - COLMAP_MATCHER"
-}
-
-################################################################################
-# Generate YAML help from discovered tools
-################################################################################
-
-generate_help_yaml() {
-    cat << 'YAML_START'
----
-tools:
-  colmap:
-YAML_START
-
-    local colmap_tools
+build_env_var_command_mapping() {
+    local colmap_tools openmvs_tools
     colmap_tools=$(discover_colmap_tools 2>/dev/null || true)
-
-    while IFS= read -r tool; do
-        [[ -z "$tool" ]] && continue
-        output_tool_entry "$tool"
-    done <<< "$colmap_tools"
-    # Inject custom pseudo-tools
-    output_custom_colmap_tool_entries
-
-    echo "  openmvs:"
-
-    local openmvs_tools
     openmvs_tools=$(discover_openmvs_tools 2>/dev/null || true)
 
     while IFS= read -r tool; do
         [[ -z "$tool" ]] && continue
-        output_tool_entry "$tool" "$OPENMVS_BIN_DIR/$tool"
+        local env_vars
+        env_vars=$(find_env_vars_for_tool "$tool")
+        [[ -z "$env_vars" ]] && continue
+        while IFS= read -r var; do
+            [[ -z "$var" ]] && continue
+            echo "$var colmap $tool"
+        done <<< "$env_vars"
+    done <<< "$colmap_tools"
+
+    while IFS= read -r tool; do
+        [[ -z "$tool" ]] && continue
+        local env_vars
+        env_vars=$(find_env_vars_for_tool "$tool")
+        [[ -z "$env_vars" ]] && continue
+        while IFS= read -r var; do
+            [[ -z "$var" ]] && continue
+            echo "$var openmvs $tool"
+        done <<< "$env_vars"
     done <<< "$openmvs_tools"
 }
 
 ################################################################################
-# Generate YAML variables configuration
+# Generate YAML: environment variables → command help text
 ################################################################################
 
-generate_vars_yaml() {
-    cat << 'VARS_START'
-environment_variables:
-VARS_START
+generate_help_yaml() {
+    echo "---"
+    echo "environment_variables:"
 
-    local all_env_vars
-    all_env_vars=$(discover_env_vars_from_stages)
+    local all_vars
+    all_vars=$(discover_env_vars_from_stages)
+    [[ -z "$all_vars" ]] && return 0
 
-    echo "$all_env_vars" | while read -r var; do
+    # Build the auto-discovered mapping (tool → env-var associations from stages)
+    declare -A var_to_type  # "colmap" or "openmvs"
+    declare -A var_to_tool
+
+    local mapping
+    mapping=$(build_env_var_command_mapping)
+    while IFS=' ' read -r var type tool; do
         [[ -z "$var" ]] && continue
-        echo "  - $var"
-    done
+        var_to_type["$var"]="$type"
+        var_to_tool["$var"]="$tool"
+    done <<< "$mapping"
+
+    # Custom selector variables (no tool --help to query)
+    var_to_type["COLMAP_MAPPER"]="custom"
+    var_to_type["COLMAP_MATCHER"]="custom"
+
+    # Cache help text per unique (type,tool) pair so shared commands
+    # (e.g. ReconstructMesh for sparse/dense variants) are queried once.
+    declare -A help_cache
+
+    while IFS= read -r var; do
+        [[ -z "$var" ]] && continue
+
+        local type="${var_to_type[$var]:-}"
+        [[ -z "$type" ]] && continue
+
+        local help_text=""
+
+        if [[ "$type" == "custom" ]]; then
+            help_text=$(get_custom_var_help "$var") || true
+        else
+            local tool="${var_to_tool[$var]}"
+            local cache_key="${type}:${tool}"
+            if [[ -n "${help_cache[$cache_key]:-}" ]]; then
+                help_text="${help_cache[$cache_key]}"
+            else
+                if [[ "$type" == "colmap" ]]; then
+                    help_text=$(get_tool_help "$tool")
+                else
+                    help_text=$(get_tool_help "$tool" "${OPENMVS_BIN_DIR}/${tool}")
+                fi
+                help_cache[$cache_key]="$help_text"
+            fi
+        fi
+
+        [[ -z "$help_text" ]] && continue
+
+        echo "  $var:"
+        echo -n "    help: "
+        yaml_block_scalar "$help_text" 6
+    done <<< "$all_vars"
 }
 
 ################################################################################
@@ -276,7 +314,6 @@ generate_vars_shell() {
 case "${1:-help}" in
     --print-help)
         generate_help_yaml
-        generate_vars_yaml
         ;;
     --print-vars-shell)
         generate_vars_shell
@@ -287,8 +324,9 @@ Tool Discovery System
 Usage: discover.sh [--print-help | --print-vars-shell | --help]
 
 MODES:
-  --print-help           Generate YAML help for pipeline with auto-discovered tools
-                         and their help text (copied as-is, not parsed)
+  --print-help           Generate YAML documentation for all configurable
+                         environment variables and their associated tool
+                         help text (copied verbatim, not parsed)
 
   --print-vars-shell     Generate shell-compatible export statements
                          (for sourcing in bash scripts)
@@ -298,13 +336,15 @@ MODES:
 FEATURES:
   - Auto-discovers COLMAP tools by running 'colmap --help'
   - Auto-discovers OpenMVS tools by scanning /usr/local/bin/OpenMVS
-  - Copies tool help output verbatim without parsing
-  - Discovers environment variables from stage files only
-  - Links environment variables to tools based on stage file mentions
-  - Generates machine-readable YAML output
+  - Maps each environment variable to the tool it configures via stage-file
+    association (only outputs help for vars that have a corresponding tool)
+  - Copies tool --help output verbatim without parsing
+  - Deduplicates help queries: shared commands (sparse/dense) queried once
+  - Discovers environment variables from stage files automatically
+  - Generates clean, machine-readable YAML output
 
 EXAMPLES:
-  # View auto-discovered pipeline configuration
+  # View all configurable variables with their tool help text
   ./discover.sh --print-help
 
   # Source environment variables with defaults
