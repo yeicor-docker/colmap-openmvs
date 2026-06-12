@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 DISPLAY_NAME="COLMAP Feature Matching"
 DEPENDENCIES=("01_colmap_feature_extraction")
-INPUTS=("${WORK_DIR}/colmap/.feature_extraction.done" "${WORK_DIR}/colmap/database.db")
+INPUTS=("${WORK_DIR}/colmap/.feature_extraction.done")
 OUTPUTS=("${WORK_DIR}/colmap/.feature_matching.done")  # It cannot be database.db as it is also an input
 
 run_stage_function() {

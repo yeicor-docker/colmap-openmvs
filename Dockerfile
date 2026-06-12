@@ -178,6 +178,7 @@ RUN --mount=type=cache,target=/opt/vcpkg/cache,sharing=locked \
         -DVCPKG_TARGET_TRIPLET=${TRIPLET} \
         -DOpenMVS_USE_CUDA=$(if echo "$BASE_IMAGE" | grep -q cuda; then echo ON; else echo OFF; fi) \
         -DCMAKE_CUDA_ARCHITECTURES=${CUDA_ARCHITECTURES} \
+        -DBUILD_SHARED_LIBS=OFF \
         -DOpenMVS_USE_PYTHON=OFF \
         -DOpenMVS_BUILD_VIEWER=OFF \
         -DOpenMVS_ENABLE_TESTS=OFF \
@@ -263,7 +264,7 @@ WORKDIR /
 
 ENV HOME=/tmp \
     PATH=/usr/local/bin:/usr/local/bin/OpenMVS:$PATH \
-    LD_LIBRARY_PATH=/usr/local/lib:/usr/local/cuda/compat
+    LD_LIBRARY_PATH=/usr/local/lib
 
 LABEL org.opencontainers.image.title="colmap-openmvs" \
       org.opencontainers.image.description="COLMAP + OpenMVS: SfM and MVS pipeline" \

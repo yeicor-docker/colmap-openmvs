@@ -28,7 +28,7 @@ for arg in "$@"; do
             "${SCRIPT_DIR}/discover.sh" --print-vars-shell
             exit 0
             ;;
-        --dry-run)
+        --dry-run|--recover-logs)
             DRY_RUN=1
             ;;
     esac
@@ -44,17 +44,24 @@ PIPELINE_DIR="${WORK_DIR}/pipeline"
 VERBOSE=0
 FORCE_STAGES=""
 SKIP_STAGES=""
+RECOVER_LOGS=0
 : "${DRY_RUN:=0}"
 
 while [[ $# -gt 0 ]]; do
     case "$1" in
         -v|--verbose) VERBOSE=1; shift ;;
-        --dry-run) DRY_RUN=1; shift ;;
+        --dry-run)    DRY_RUN=1; shift ;;
+        --recover-logs) RECOVER_LOGS=1; shift ;;
         --force) FORCE_STAGES="$2"; shift 2 ;;
         --skip) SKIP_STAGES="$2"; shift 2 ;;
         *) shift ;;
     esac
 done
+
+# If recover-logs is requested, also set dry-run to skip execution
+if [[ $RECOVER_LOGS == 1 ]]; then
+    DRY_RUN=1
+fi
 
 # Validate WORK_DIR before creating PIPELINE_DIR
 if [[ ! -d "$WORK_DIR" ]]; then
@@ -79,11 +86,10 @@ main() {
         echo "::endgroup::"
     }
 
-    # Logging functions (output to stdout; per-stage output is captured to stage log files)
+    # Logging functions
     log()     { echo "[$(date '+%H:%M:%S')] • $*"; }
     log_ok()  { echo "[$(date '+%H:%M:%S')] ✓ $*"; }
     log_err() { echo "[$(date '+%H:%M:%S')] ✗ $*" >&2; }
-    log_dbg() { [[ $VERBOSE == 1 ]] && echo "[$(date '+%H:%M:%S')] ▸ $*" || true; }
 
     # Quick hash of a file or directory (paths + sizes + mtimes for change detection)
     hash_path() {
@@ -142,8 +148,13 @@ main() {
     }
 
     dependencies_satisfied() {
+        # Avoid bash 4.4+ pitfall where ${array[@]:-} on an empty array
+        # expands to one empty string element
+        if [[ ${#DEPENDENCIES[@]} -eq 0 ]]; then
+            return 0
+        fi
         local dep
-        for dep in "${DEPENDENCIES[@]:-}"; do
+        for dep in "${DEPENDENCIES[@]}"; do
             local dep_hash
             dep_hash=$(stage_hash_path "$dep")
             [[ -f "$dep_hash" ]] || return 1
@@ -186,6 +197,52 @@ main() {
         return 1
     }
 
+    # Explain cache state in clear language
+    debug_cache_state() {
+        local reasons=()
+
+        # Check dependencies
+        if [[ ${#DEPENDENCIES[@]} -gt 0 ]]; then
+            local dep
+            for dep in "${DEPENDENCIES[@]}"; do
+                if [[ ! -f "$(stage_hash_path "$dep")" ]]; then
+                    reasons+=("dependency $dep still running")
+                fi
+            done
+        fi
+
+        # Check outputs
+        local outputs_msg=""
+        for out in "${OUTPUTS[@]}"; do
+            if [[ ! -e "$out" ]]; then
+                outputs_msg="$out"
+            fi
+        done
+
+        # Hash info
+        local combined_hash=""
+        combined_hash=$(stage_compute_hash "$stage_name" "${INPUTS[@]}" "$CONFIG_FILE" "$stage_file")
+        local stored_hash
+        stored_hash=$(stage_get_hash "$stage_name")
+
+        if [[ -z "$stored_hash" ]]; then
+            :
+        elif [[ "$stored_hash" != "$combined_hash" ]]; then
+            reasons+=("inputs changed (key ${stored_hash} → ${combined_hash})")
+        fi
+
+        # Build one-line cache summary
+        if [[ $cache_stage == 1 ]]; then
+            log "OK"
+        elif [[ -n "$outputs_msg" ]]; then
+            log "missing: $outputs_msg"
+        elif [[ ${#reasons[@]} -gt 0 ]]; then
+            log "${reasons[*]}"
+        elif [[ -z "$stored_hash" ]]; then
+            log "no saved state (first run or interrupted)"
+        fi
+    }
+
     cleanup_openmvs_logs() {
         local openmvs_dir="${WORK_DIR}/openmvs"
         [[ -d "$openmvs_dir" ]] || return 0
@@ -208,12 +265,12 @@ main() {
     rm -rf "${WORK_DIR}/pipeline/stages" 2>/dev/null || true
 
     log_group "file=pipeline.sh,section=config" "Config"
-    log_dbg "Work directory: $WORK_DIR (images: $WORK_DIR/images)"
-    [[ $VERBOSE == 1 ]] && log "VERBOSE mode"
+    log "Work directory: $WORK_DIR"
+    log "Images: $WORK_DIR/images"
 
     CONFIG_FILE="${WORK_DIR}/config.sh"
     if [[ -f "$CONFIG_FILE" ]]; then
-        log_dbg "Loading config: $CONFIG_FILE"
+        log "Config: $CONFIG_FILE"
         if ! source "$CONFIG_FILE"; then
             log_err "Failed to load config: $CONFIG_FILE"
             exit 1
@@ -222,21 +279,21 @@ main() {
     log_endgroup
 
     log_group "file=pipeline.sh,section=tools" "Tool Discovery"
-    log_dbg "Discovering config..."
     eval "$(${SCRIPT_DIR}/discover.sh --print-vars-shell)" || { log_err "Failed to discover tools"; exit 1; }
-    log_dbg "Found ${#stages[@]} stages"
     log_endgroup
 
     ############################################################################
     # Execute stages
     ############################################################################
 
+    # Print a stages overview before starting
+    readarray -t stages < <(find "${STAGES_DIR}" -name "*.stage.sh" | sort)
     if [[ ${#stages[@]} -eq 0 ]]; then
         log_err "No stages found in $STAGES_DIR"
         exit 1
     fi
+    log "Pipeline: ${#stages[@]} stages loaded"
 
-    # Now handle stale reasons inside the group for each stage
     stage_count=0
 
     for stage_file in "${stages[@]}"; do
@@ -249,7 +306,7 @@ main() {
             exit 1
         fi
 
-        # Determine status first, then open group
+        # Determine status
         stage_status="run"
         skip_stage=0
         cache_stage=0
@@ -264,57 +321,59 @@ main() {
             stale_reason="dependency_missing"
             stage_status="run"
         elif stale_reason=$(outputs_stale "$stage_name" "${INPUTS[*]:-}" "${OUTPUTS[*]:-}"); then
-            # outputs_stale returns 0 (true) if stale/has reason, 1 (false) if fresh
             stage_status="run"
         else
             stage_status="cached"
             cache_stage=1
         fi
 
-        # Open group and log inside it with type and count
+        # Open stage group
         local display_name="${DISPLAY_NAME:-$stage_name}"
         log_group "file=${stage_file},type=stage,status=${stage_status},count=${stage_count}/${#stages[@]}" "$display_name"
+        debug_cache_state
 
+        # Handle special modes
         if [[ $skip_stage == 1 ]]; then
-            log "Stage $stage_name: skipped (--skip)"
+            log "  skipped (--skip)"
             log_endgroup
             continue
         elif [[ $cache_stage == 1 ]]; then
-            # Replay cached stage output
             stage_log=$(stage_log_path "$stage_name")
             if [[ -f "$stage_log" ]]; then
                 cat "$stage_log"
-            else
-                log "Stage $stage_name: cached (hash unchanged) [no log to replay]"
             fi
             log_endgroup
             continue
-        fi
-
-        # Check if dry-run mode - skip execution but show debug message in verbose mode
-        if [[ ${DRY_RUN:-0} == 1 ]]; then
-            log "Stage $stage_name: skipped due to --dry-run"
+        elif [[ $RECOVER_LOGS == 1 ]]; then
+            stage_log=$(stage_log_path "$stage_name")
+            if [[ -f "$stage_log" ]]; then
+                log "  previous run log:"
+                cat "$stage_log"
+            else
+                log "  no previous log to recover"
+            fi
+            log_endgroup
+            continue
+        elif [[ ${DRY_RUN:-0} == 1 ]]; then
+            log "  skipped (--dry-run)"
             log_endgroup
             continue
         fi
 
-        # Running stage - capture output to log file with live display
+        # Execute stage
         stage_log=$(stage_log_path "$stage_name")
         if [[ "$stage_status" == "forced" ]]; then
-            log "Stage $stage_name: forced (--force)"
+            log "  forced (--force)"
         else
-            log "Stage $stage_name: will run (${stale_reason:-missing/stale outputs})"
+            log "  ${stale_reason:-missing/stale outputs}"
         fi
 
-        # Run stage with live output and save to log file using tee
-        # This shows output live while capturing it to the stage log file
-        # Use a subshell with set +e to capture exit code properly
         (
             set +e
             run_stage "$stage_name" 2>&1
             echo $? > "${stage_log}.exit_code"
         ) | tee "$stage_log"
-        # Verify log file was created
+
         if [[ ! -f "$stage_log" ]]; then
             log_err "Failed to create stage log: $stage_log"
         fi
@@ -323,11 +382,7 @@ main() {
 
         if [[ $exit_code -ne 0 ]]; then
             log_err "$stage_name (exit code: $exit_code)"
-            if [[ $VERBOSE == 1 ]]; then
-                log_err "Check log for details"
-            else
-                log_err "See $stage_log for details"
-            fi
+            log_err "See $stage_log for details"
             exit 1
         fi
 
@@ -344,7 +399,7 @@ main() {
             exit 1
         fi
 
-        # Save hash of inputs only (matches what outputs_stale checks)
+        # Save hash and complete
         current_hash=$(stage_compute_hash "$stage_name" "${INPUTS[@]:-}" "$CONFIG_FILE" "$stage_file")
         stage_save_hash "$stage_name" "$current_hash"
 
@@ -353,26 +408,22 @@ main() {
         log_ok "$stage_name"
         log_endgroup
     done
+
+    # Pipeline complete
+    echo ""
+    log "Pipeline complete"
 }
 
 ################################################################################
 # Discover stages and print remaining groups early
 ################################################################################
 
-readarray -t stages < <(find "${STAGES_DIR}" -name "*.stage.sh" | sort)
-
-declare -a stage_display_names
-for stage_file in "${stages[@]}"; do
-    stage_name=$(basename "$stage_file" .stage.sh)
-    display_name=$(grep -m1 '^DISPLAY_NAME=' "$stage_file" 2>/dev/null | cut -d= -f2 | tr -d '"' || echo "")
-    display_name="${display_name:-$stage_name}"
-    stage_display_names+=("$display_name")
-done
-
 echo -n "::remaining_groups::Config,Tool Discovery"
-for display_name in "${stage_display_names[@]}"; do
+STAGES_DIR="${STAGES_DIR:-$SCRIPT_DIR/stages}"
+while IFS= read -r stage_file; do
+    display_name=$(grep -m1 '^DISPLAY_NAME=' "$stage_file" 2>/dev/null | cut -d= -f2 | tr -d '"' || basename "$stage_file" .stage.sh)
     echo -n ",$display_name"
-done
+done < <(find "${STAGES_DIR}" -name "*.stage.sh" | sort 2>/dev/null)
 echo ""
 
 # Run main; keep set -e active so failures inside main are not silently swallowed.
