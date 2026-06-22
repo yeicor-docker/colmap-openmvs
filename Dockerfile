@@ -244,7 +244,8 @@ RUN set -eux; \
         libglx-mesa0 \
         libgl1 \
         libgl1-mesa-dri \
-        libgomp1" && \
+        libgomp1
+        libavcodec-dev libavformat-dev libavutil-dev libswscale-dev libswresample-dev" && \
     for attempt in 1 2 3; do sh -c "$APT_CMD" && break || ([ $attempt -lt 3 ] && sleep 5); done && \
     rm -rf /var/lib/apt/lists/*
 
