@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
-DISPLAY_NAME="OpenMVS Dense Texture"
-DEPENDENCIES=("11_openmvs_dense_refine")
+DISPLAY_NAME="Dense Texture"
+DEPENDENCIES=("11_dense_refine")
+FILE_DEPENDENCIES=("${WORK_DIR}/openmvs/scene_dense.mvs")
 INPUTS=("${WORK_DIR}/openmvs/scene_dense.mvs" "${WORK_DIR}/openmvs/scene_dense_mesh_refined.ply")
 OUTPUTS=("${WORK_DIR}/openmvs/scene_dense_mesh_refined_textured.ply")
 

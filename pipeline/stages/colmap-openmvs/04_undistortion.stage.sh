@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 DISPLAY_NAME="COLMAP Undistortion"
-DEPENDENCIES=("03_colmap_mapping")
+DEPENDENCIES=("03_mapping")
 INPUTS=("${WORK_DIR}/colmap/sparse/0/cameras.bin")
 OUTPUTS=("${WORK_DIR}/colmap/dense/images")
 

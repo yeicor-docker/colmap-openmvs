@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
-DISPLAY_NAME="OpenMVS Sparse Mesh"
-DEPENDENCIES=("05_openmvs_scene_export")
+DISPLAY_NAME="Sparse Mesh"
+DEPENDENCIES=()
+FILE_DEPENDENCIES=("${WORK_DIR}/openmvs/scene.mvs")
 INPUTS=("${WORK_DIR}/openmvs/scene.mvs")
 OUTPUTS=("${WORK_DIR}/openmvs/scene_mesh.ply")
 

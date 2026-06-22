@@ -38,6 +38,7 @@ WORK_DIR="${1:-.}"
 shift || true
 
 IMAGES_DIR="${WORK_DIR}/images"
+VIDEOS_DIR="${WORK_DIR}/videos"
 PIPELINE_DIR="${WORK_DIR}/pipeline"
 
 # Parse options
@@ -148,16 +149,18 @@ main() {
     }
 
     dependencies_satisfied() {
-        # Avoid bash 4.4+ pitfall where ${array[@]:-} on an empty array
-        # expands to one empty string element
-        if [[ ${#DEPENDENCIES[@]} -eq 0 ]]; then
-            return 0
-        fi
+        # Check stage-name dependencies (hash file existence)
         local dep
-        for dep in "${DEPENDENCIES[@]}"; do
+        for dep in "${DEPENDENCIES[@]:-}"; do
+            [[ -z "$dep" ]] && continue
             local dep_hash
             dep_hash=$(stage_hash_path "$dep")
             [[ -f "$dep_hash" ]] || return 1
+        done
+        # Check file/directory dependencies (path existence)
+        for dep in "${FILE_DEPENDENCIES[@]:-}"; do
+            [[ -z "$dep" ]] && continue
+            [[ -e "$dep" ]] || return 1
         done
         return 0
     }
@@ -201,15 +204,22 @@ main() {
     debug_cache_state() {
         local reasons=()
 
-        # Check dependencies
-        if [[ ${#DEPENDENCIES[@]} -gt 0 ]]; then
-            local dep
-            for dep in "${DEPENDENCIES[@]}"; do
-                if [[ ! -f "$(stage_hash_path "$dep")" ]]; then
-                    reasons+=("dependency $dep still running")
-                fi
-            done
-        fi
+        # Check stage-name dependencies
+        local dep
+        for dep in "${DEPENDENCIES[@]:-}"; do
+            [[ -z "$dep" ]] && continue
+            if [[ ! -f "$(stage_hash_path "$dep")" ]]; then
+                reasons+=("dependency $dep still running")
+            fi
+        done
+
+        # Check file dependencies
+        for dep in "${FILE_DEPENDENCIES[@]:-}"; do
+            [[ -z "$dep" ]] && continue
+            if [[ ! -e "$dep" ]]; then
+                reasons+=("missing file: $dep")
+            fi
+        done
 
         # Check outputs
         local outputs_msg=""
@@ -257,8 +267,8 @@ main() {
         fi
     }
 
-    if [[ ! -d "$WORK_DIR/images" ]]; then
-        log_err "No images/ directory in: $WORK_DIR"
+    if [[ ! -d "$WORK_DIR/images" ]] && [[ ! -d "$WORK_DIR/videos" ]]; then
+        log_err "No images/ or videos/ directory in: $WORK_DIR"
         exit 1
     fi
 
@@ -267,6 +277,9 @@ main() {
     log_group "file=pipeline.sh,section=config" "Config"
     log "Work directory: $WORK_DIR"
     log "Images: $WORK_DIR/images"
+    if [[ -d "$WORK_DIR/videos" ]]; then
+        log "Videos: $WORK_DIR/videos"
+    fi
 
     CONFIG_FILE="${WORK_DIR}/config.sh"
     if [[ -f "$CONFIG_FILE" ]]; then
@@ -287,12 +300,14 @@ main() {
     ############################################################################
 
     # Print a stages overview before starting
-    readarray -t stages < <(find "${STAGES_DIR}" -name "*.stage.sh" | sort)
+    local pipeline="${SFM_PIPELINE:-colmap-openmvs}"
+    local pipeline_dir="${STAGES_DIR}/${pipeline}"
+    readarray -t stages < <(find "${pipeline_dir}" -maxdepth 1 -name "*.stage.sh" | sort)
     if [[ ${#stages[@]} -eq 0 ]]; then
-        log_err "No stages found in $STAGES_DIR"
+        log_err "No stages found in ${pipeline_dir}"
         exit 1
     fi
-    log "Pipeline: ${#stages[@]} stages loaded"
+    log "Pipeline: ${#stages[@]} stages loaded (SFM_PIPELINE=${pipeline})"
 
     stage_count=0
 
@@ -300,7 +315,7 @@ main() {
         stage_name=$(basename "$stage_file" .stage.sh)
         ((stage_count++))
 
-        unset DEPENDENCIES INPUTS OUTPUTS DISPLAY_NAME run_stage_function
+        unset DEPENDENCIES INPUTS OUTPUTS FILE_DEPENDENCIES DISPLAY_NAME run_stage_function
         if ! source "$stage_file"; then
             log_err "Failed to load stage file: $stage_file"
             exit 1
@@ -420,10 +435,11 @@ main() {
 
 echo -n "::remaining_groups::Config,Tool Discovery"
 STAGES_DIR="${STAGES_DIR:-$SCRIPT_DIR/stages}"
+PIPELINE="${SFM_PIPELINE:-colmap-openmvs}"
 while IFS= read -r stage_file; do
     display_name=$(grep -m1 '^DISPLAY_NAME=' "$stage_file" 2>/dev/null | cut -d= -f2 | tr -d '"' || basename "$stage_file" .stage.sh)
     echo -n ",$display_name"
-done < <(find "${STAGES_DIR}" -name "*.stage.sh" | sort 2>/dev/null)
+done < <(find "${STAGES_DIR}/${PIPELINE}" -maxdepth 1 -name "*.stage.sh" | sort 2>/dev/null)
 echo ""
 
 # Run main; keep set -e active so failures inside main are not silently swallowed.

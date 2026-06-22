@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
-DISPLAY_NAME="OpenMVS Sparse Refine"
-DEPENDENCIES=("06_openmvs_sparse_mesh")
+DISPLAY_NAME="Sparse Refine"
+DEPENDENCIES=("06_sparse_mesh")
+FILE_DEPENDENCIES=("${WORK_DIR}/openmvs/scene.mvs")
 INPUTS=("${WORK_DIR}/openmvs/scene.mvs" "${WORK_DIR}/openmvs/scene_mesh.ply")
 OUTPUTS=("${WORK_DIR}/openmvs/scene_mesh_refined.ply")
 

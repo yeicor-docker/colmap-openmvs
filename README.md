@@ -6,27 +6,34 @@ If you just want an easy-to-use cross-platform app, see [colmap-openmvs-app](htt
 
 ## Features
 
-- **End-to-End Photogrammetry**: From unordered images to textured 3D meshes, fully automated.
+- **End-to-End Photogrammetry**: From unordered images (or videos) to textured 3D meshes, fully automated.
 - **CPU & CUDA Support**: Choose CPU for maximum compatibility (even on GPU-less servers), or CUDA for optimal speed (with a larger image size). Both are first-class citizens.
 - **Latest Development Versions**: Always up-to-date with automated, tested builds.
 - **Dockerized**: Run anywhere with a single command; no dependency hell.
 - **Intelligent Caching**: Only re-runs steps when inputs change.
+- **Pluggable SfM Pipelines**: Choose between COLMAP-based SfM or OpenMVS-native SfM via the `SFM_PIPELINE` environment variable.
 - **Verbose Logging & Dry-Run**: Debug and inspect every step, or simulate runs without execution.
 - **User Mapping**: Use `-u $(id -u):$(id -g)` for proper file permissions on output.
 - **Comprehensive Help**: `--help` provides detailed info about all embedded tools and configuration options.
 
 ## Quickstart
 
-1. **Prepare your images** 
+1. **Prepare your images (or videos)** 
 
-Place your images in a directory with a subfolder called `images/`:
+Place your images in a directory with a subfolder called `images/` and/or `videos/`:
 ```
 /your/data/path/
-  images/
+  images/          # (optional) already captured images
     img1.jpg
     img2.jpg
     ...
+  videos/          # (optional) videos to extract keyframes from
+    flight1.mp4
+    flight2.webm
+    ...
 ```
+
+If you provide videos, keyframes are automatically extracted into `images/` on the first pipeline run. You may provide both `images/` and `videos/` simultaneously — existing images are preserved and videos add additional frames.
 
 2. **(Optional) Add a custom config**  
 
@@ -52,5 +59,26 @@ docker run --rm -it --gpus all -u $(id -u):$(id -g) \
   -v /your/data/path:/data \
   yeicor/colmap-openmvs:cuda-latest /data
 ```
+
+### Choosing an SfM Pipeline
+
+Use the `SFM_PIPELINE` environment variable to select which SfM backend to use:
+
+- `colmap-openmvs` (default) — COLMAP for feature extraction, matching, mapping, and undistortion, then InterfaceCOLMAP to export for OpenMVS.
+- `openmvs-full` — OpenMVS's `CreateStructure` handles the entire SfM stage (feature extraction, matching, and reconstruction) directly, without COLMAP.
+
+```sh
+# Default (COLMAP-based SfM)
+docker run --rm -it -u $(id -u):$(id -g) \
+  -v /your/data/path:/data \
+  yeicor/colmap-openmvs:cpu-latest /data
+
+# OpenMVS-native SfM
+docker run --rm -it -e SFM_PIPELINE=openmvs-full -u $(id -u):$(id -g) \
+  -v /your/data/path:/data \
+  yeicor/colmap-openmvs:cpu-latest /data
+```
+
+Available pipelines are auto-discovered from subdirectories in `/pipeline/stages/`. Run `--help` for up-to-date documentation of all configurable variables.
 
 Happy reconstructing!

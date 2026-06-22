@@ -175,6 +175,7 @@ jobs:
       fail-fast: false
       matrix:
         arch: [amd64, arm64]
+        pipeline: [colmap-openmvs, openmvs-full]
         include:
           # Native runners
           - arch: amd64
@@ -199,17 +200,21 @@ jobs:
           sudo apt-get install -y imagemagick
           find test_obj/images -type f -name "*.JPG" -exec mogrify -resize 25% {} \;
           rm -rf tmp dataset.7z
-      - name: Run docker container for testing
+      - name: Run docker container for testing (${{ matrix.pipeline }})
         timeout-minutes: 90
-        run: docker run --user $UID:$GID --rm -v ${{ github.workspace }}/test_obj:/work ${{ needs.meta.outputs.image }}:cpu-${{ matrix.arch }}-${{ needs.meta.outputs.tag }} /usr/bin/bash /entrypoint.sh /work -v
-      - name: Upload results (fail if missing)
+        run: docker run --user $UID:$GID --rm -e SFM_PIPELINE=${{ matrix.pipeline }} -v ${{ github.workspace }}/test_obj:/work ${{ needs.meta.outputs.image }}:cpu-${{ matrix.arch }}-${{ needs.meta.outputs.tag }} /usr/bin/bash /entrypoint.sh /work -v
+      - name: Upload openmvs results
         uses: actions/upload-artifact@v7
         with:
-          name: test-output-${{ matrix.arch }}
-          path: |
-            test_obj/colmap
-            test_obj/openmvs
+          name: test-output-${{ matrix.pipeline }}-${{ matrix.arch }}
+          path: test_obj/openmvs
           if-no-files-found: error
+      - name: Upload colmap results
+        if: matrix.pipeline == 'colmap-openmvs'
+        uses: actions/upload-artifact@v7
+        with:
+          name: test-output-${{ matrix.pipeline }}-${{ matrix.arch }}
+          path: test_obj/colmap
 
   publish:
     needs: [meta, test]
