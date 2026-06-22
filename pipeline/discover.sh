@@ -203,7 +203,7 @@ get_custom_var_help() {
         SFM_PIPELINE)
             local pipelines
             pipelines=$(discover_pipelines | tr '\n' ', ' | sed 's/,$//' | sed 's/,/, /g')
-            echo "Selects the SfM pipeline to use. Auto-discovered from subdirectories in stages/ (excludes common/ and lib/). Available: ${pipelines:-none}. Default: colmap-openmvs."
+            echo "Selects the SfM pipeline to use. Auto-discovered from subdirectories in stages/ (excludes common/ and lib/). Available: ${pipelines:-none}. Default: colmap-openmvs-sparse."
             ;;
         *)
             return 1

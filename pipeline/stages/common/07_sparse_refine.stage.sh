@@ -7,5 +7,5 @@ OUTPUTS=("${WORK_DIR}/openmvs/scene_mesh_refined.ply")
 
 run_stage_function() {
     cd "${WORK_DIR}/openmvs"
-    RefineMesh -i scene.mvs -m scene_mesh.ply -o scene_mesh_refined.ply ${OPENMVS_REFINE_MESH_SPARSE_ARGS}
+    RefineMesh -i scene.mvs -m scene_mesh.ply -o scene_mesh_refined.ply ${OPENMVS_REFINE_MESH_ARGS}
 }

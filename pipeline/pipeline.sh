@@ -300,7 +300,7 @@ main() {
     ############################################################################
 
     # Print a stages overview before starting
-    local pipeline="${SFM_PIPELINE:-colmap-openmvs}"
+    local pipeline="${SFM_PIPELINE:-colmap-openmvs-sparse}"
     local pipeline_dir="${STAGES_DIR}/${pipeline}"
     readarray -t stages < <(find "${pipeline_dir}" -maxdepth 1 -name "*.stage.sh" | sort)
     if [[ ${#stages[@]} -eq 0 ]]; then
@@ -432,7 +432,7 @@ main() {
 
 echo -n "::remaining_groups::Config,Tool Discovery"
 STAGES_DIR="${STAGES_DIR:-$SCRIPT_DIR/stages}"
-PIPELINE="${SFM_PIPELINE:-colmap-openmvs}"
+PIPELINE="${SFM_PIPELINE:-colmap-openmvs-sparse}"
 while IFS= read -r stage_file; do
     display_name=$(grep -m1 '^DISPLAY_NAME=' "$stage_file" 2>/dev/null | cut -d= -f2 | tr -d '"' || basename "$stage_file" .stage.sh)
     echo -n ",$display_name"

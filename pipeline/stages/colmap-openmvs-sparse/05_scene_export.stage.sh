@@ -1,0 +1,1 @@
+../common/05_scene_export.stage.sh
