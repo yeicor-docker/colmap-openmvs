@@ -384,16 +384,13 @@ main() {
         fi
 
         (
-            set +e
             run_stage "$stage_name" 2>&1
-            echo $? > "${stage_log}.exit_code"
         ) | tee "$stage_log"
+        exit_code=${PIPESTATUS[0]}
 
         if [[ ! -f "$stage_log" ]]; then
             log_err "Failed to create stage log: $stage_log"
         fi
-        exit_code=$(cat "${stage_log}.exit_code" 2>/dev/null || echo "1")
-        rm -f "${stage_log}.exit_code"
 
         if [[ $exit_code -ne 0 ]]; then
             log_err "$stage_name (exit code: $exit_code)"
