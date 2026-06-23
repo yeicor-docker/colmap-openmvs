@@ -295,6 +295,20 @@ main() {
     eval "$(${SCRIPT_DIR}/discover.sh --print-vars-shell)" || { log_err "Failed to discover tools"; exit 1; }
     log_endgroup
 
+    # Print remaining groups annotation early so consumers (e.g. GitHub Actions UI)
+    # can render the full stage list before execution starts.
+    # Must run after config sourcing so SFM_PIPELINE overrides are respected.
+    {
+        local _pipeline="${SFM_PIPELINE:-colmap-openmvs-sparse}"
+        echo -n "::remaining_groups::Config,Tool Discovery"
+        while IFS= read -r _stage_file; do
+            local _display_name
+            _display_name=$(grep -m1 '^DISPLAY_NAME=' "$_stage_file" 2>/dev/null | cut -d= -f2 | tr -d '"' || basename "$_stage_file" .stage.sh)
+            echo -n ",$_display_name"
+        done < <(find "${STAGES_DIR}/${_pipeline}" -maxdepth 1 -name "*.stage.sh" | sort 2>/dev/null)
+        echo ""
+    }
+
     ############################################################################
     # Execute stages
     ############################################################################
@@ -427,17 +441,10 @@ main() {
 }
 
 ################################################################################
-# Discover stages and print remaining groups early
+# Run main
 ################################################################################
 
-echo -n "::remaining_groups::Config,Tool Discovery"
-STAGES_DIR="${STAGES_DIR:-$SCRIPT_DIR/stages}"
-PIPELINE="${SFM_PIPELINE:-colmap-openmvs-sparse}"
-while IFS= read -r stage_file; do
-    display_name=$(grep -m1 '^DISPLAY_NAME=' "$stage_file" 2>/dev/null | cut -d= -f2 | tr -d '"' || basename "$stage_file" .stage.sh)
-    echo -n ",$display_name"
-done < <(find "${STAGES_DIR}/${PIPELINE}" -maxdepth 1 -name "*.stage.sh" | sort 2>/dev/null)
-echo ""
+# (remaining_groups is now emitted inside main() after config is sourced)
 
 # Run main; keep set -e active so failures inside main are not silently swallowed.
 # Capture exit code without disabling errexit by using the ||  pattern.
