@@ -192,8 +192,8 @@ jobs:
         run: |
           mkdir -p test_obj/videos
           curl -fL \
-            "https://github.com/${{ github.repository }}/releases/download/test-video-1/test.mp4" \
-            -o test_obj/videos/test.mp4
+            "https://github.com/${{ github.repository }}/releases/download/test-video-1/clip.mp4" \
+            -o test_obj/videos/clip.mp4
       - name: Run docker container for testing (${{ matrix.pipeline }})
         timeout-minutes: 90
         run: docker run --user $(id -u):$(id -g) --rm -e SFM_PIPELINE=${{ matrix.pipeline }} -v ${{ github.workspace }}/test_obj:/work ${{ needs.meta.outputs.image }}:cpu-${{ matrix.arch }}-${{ needs.meta.outputs.tag }} /usr/bin/bash /entrypoint.sh /work -v
