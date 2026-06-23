@@ -188,15 +188,12 @@ jobs:
         with:
           name: docker-image-cpu-${{ matrix.arch }}-Release-${{ needs.meta.outputs.tag }}
       - run: docker load -i docker-image-*.tar && rm docker-image-*.tar
-      - name: Generate synthetic test video
+      - name: Download test video
         run: |
-          sudo apt-get update && sudo apt-get install -y ffmpeg
           mkdir -p test_obj/videos
-          # Synthetic video with moving test pattern + grid for visual features
-          ffmpeg -y -f lavfi -i "testsrc2=size=1920x1080:rate=30:duration=4" \
-            -vf "drawgrid=w=iw/8:h=ih/8:c=white@0.3:t=1" \
-            -c:v libx264 -pix_fmt yuv420p -preset ultrafast \
-            test_obj/videos/test.mp4
+          curl -fL \
+            "https://github.com/${{ github.repository }}/releases/download/test-video-1/test.mp4" \
+            -o test_obj/videos/test.mp4
       - name: Run docker container for testing (${{ matrix.pipeline }})
         timeout-minutes: 90
         run: docker run --user $(id -u):$(id -g) --rm -e SFM_PIPELINE=${{ matrix.pipeline }} -v ${{ github.workspace }}/test_obj:/work ${{ needs.meta.outputs.image }}:cpu-${{ matrix.arch }}-${{ needs.meta.outputs.tag }} /usr/bin/bash /entrypoint.sh /work -v
