@@ -71,6 +71,7 @@ run_stage_function() {
 
         # Rename and convert extracted frames (removes temp files)
         local frame_idx=1
+        set +x 2>/dev/null  # Suppress verbose tracing inside per-frame loop
         while IFS= read -r -d '' frame; do
             local ext="${frame##*.}"
             local ext_lower
@@ -94,6 +95,7 @@ run_stage_function() {
 
             ((frame_idx++))
         done < <(find "$temp_dir" -type f -print0 | sort -z)
+        set -x 2>/dev/null  # Re-enable verbose tracing
 
         # Cleanup temporary extraction directory
         rm -rf "$temp_dir"
