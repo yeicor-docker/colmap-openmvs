@@ -56,6 +56,14 @@ run_stage_function() {
         mkdir -p "$temp_dir"
 
         log "Extracting keyframes from: $basename"
+        # Auto-detect detector type only if not overridden via EXTRACT_KEYFRAMES_ARGS
+        if ! echo " ${EXTRACT_KEYFRAMES_ARGS:-} " | grep -qE '[-]{1,2}t[ =]|detector-type[ =]'; then
+            local detector_type="SIFTGPU"
+            if ! command -v nvidia-smi &>/dev/null; then
+                detector_type="SIFT"
+            fi
+            EXTRACT_KEYFRAMES_ARGS="-t ${detector_type} ${EXTRACT_KEYFRAMES_ARGS}"
+        fi
         ExtractKeyframes \
             -i "$video" \
             -d "$temp_dir" \
