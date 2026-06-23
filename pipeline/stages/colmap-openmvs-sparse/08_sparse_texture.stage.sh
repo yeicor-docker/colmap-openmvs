@@ -1,0 +1,1 @@
+../common/08_sparse_texture.stage.sh

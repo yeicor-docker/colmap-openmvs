@@ -1,0 +1,1 @@
+../common/12_dense_texture.stage.sh

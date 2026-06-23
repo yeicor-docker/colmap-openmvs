@@ -54,6 +54,16 @@ yaml_block_scalar() {
 # Discover environment variables from stage files (source of truth)
 ################################################################################
 
+# Find all stage files across common/ and all pipeline directories
+find_stage_files() {
+    find "$STAGES_DIR" -maxdepth 2 -name "*.stage.sh" -type f 2>/dev/null | sort -u || true
+}
+
+# Auto-discover available pipelines from subdirectories (excluding common/ and lib/)
+discover_pipelines() {
+    find "$STAGES_DIR" -mindepth 1 -maxdepth 1 -type d ! -name "common" ! -name "lib" -printf "%f\n" 2>/dev/null | sort || true
+}
+
 discover_env_vars_from_stages() {
     [[ -d "$STAGES_DIR" ]] || return 0
     while IFS= read -r stage_file; do
@@ -63,7 +73,7 @@ discover_env_vars_from_stages() {
                 [[ "$var" =~ IMAGES_DIR|WORK_DIR ]] && continue  # Skip core path variables
                 echo "$var"
             done
-    done < <(find "$STAGES_DIR" -maxdepth 1 -name "*.stage.sh" | sort) || true
+    done < <(find_stage_files) || true
 }
 
 ################################################################################
@@ -164,7 +174,7 @@ get_tool_help() {
 find_env_vars_for_tool() {
     local tool_name="$1"
     local check_file
-    check_file="$(grep -lF -- "$tool_name" "$STAGES_DIR"/*.stage.sh 2>/dev/null || true)"
+    check_file="$(grep -rlF -- "$tool_name" "$STAGES_DIR" --include="*.stage.sh" 2>/dev/null || true)"
     [[ -z "$check_file" ]] && return 0
     local -a check_files
     mapfile -t check_files <<< "$check_file"
@@ -186,6 +196,14 @@ get_custom_var_help() {
             ;;
         COLMAP_MATCHER)
             echo "Selects COLMAP feature matcher. Options: exhaustive_matcher, sequential_matcher, spatial_matcher, transitive_matcher, vocab_tree_matcher (default)."
+            ;;
+        EXTRACT_KEYFRAMES_REMOVE_VIDEOS)
+            echo "If set to true, deletes video files from videos/ after successful keyframe extraction."
+            ;;
+        SFM_PIPELINE)
+            local pipelines
+            pipelines=$(discover_pipelines | tr '\n' ', ' | sed 's/,$//' | sed 's/,/, /g')
+            echo "Selects the SfM pipeline to use. Auto-discovered from subdirectories in stages/ (excludes common/ and lib/). Available: ${pipelines:-none}. Default: colmap-openmvs-sparse."
             ;;
         *)
             return 1
@@ -237,7 +255,6 @@ generate_help_yaml() {
 
     local all_vars
     all_vars=$(discover_env_vars_from_stages)
-    [[ -z "$all_vars" ]] && return 0
 
     # Build the auto-discovered mapping (tool → env-var associations from stages)
     declare -A var_to_type  # "colmap" or "openmvs"
@@ -251,9 +268,25 @@ generate_help_yaml() {
         var_to_tool["$var"]="$tool"
     done <<< "$mapping"
 
-    # Custom selector variables (no tool --help to query)
+    # Custom selector/flag variables (no tool --help to query)
     var_to_type["COLMAP_MAPPER"]="custom"
     var_to_type["COLMAP_MATCHER"]="custom"
+    var_to_type["EXTRACT_KEYFRAMES_REMOVE_VIDEOS"]="custom"
+    var_to_type["SFM_PIPELINE"]="custom"
+
+    # Merge auto-discovered vars with registered custom vars so all appear in output
+    # even if not referenced in any stage file (e.g. SFM_PIPELINE)
+    if [[ -n "$all_vars" ]]; then
+        while IFS= read -r var; do
+            [[ -z "$var" ]] && continue
+            var_to_type["$var"]="${var_to_type[$var]:-}"
+        done <<< "$all_vars"
+        all_vars=$(printf '%s\n' "${!var_to_type[@]}")
+    elif [[ ${#var_to_type[@]} -gt 0 ]]; then
+        all_vars=$(printf '%s\n' "${!var_to_type[@]}")
+    else
+        return 0
+    fi
 
     # Cache help text per unique (type,tool) pair so shared commands
     # (e.g. ReconstructMesh for sparse/dense variants) are queried once.
@@ -299,7 +332,19 @@ generate_help_yaml() {
 generate_vars_shell() {
     local all_env_vars
     all_env_vars=$(discover_env_vars_from_stages)
-    [[ -z "$all_env_vars" ]] && return 0
+
+    # Always include custom selector/flag variables even if not in stage files
+    local custom_vars="COLMAP_MAPPER
+COLMAP_MATCHER
+EXTRACT_KEYFRAMES_REMOVE_VIDEOS
+SFM_PIPELINE"
+
+    # Merge and deduplicate
+    if [[ -n "$all_env_vars" ]]; then
+        all_env_vars=$(printf '%s\n%s' "$all_env_vars" "$custom_vars" | sort -u)
+    else
+        all_env_vars="$custom_vars"
+    fi
 
     echo "$all_env_vars" | while read -r var; do
         [[ -z "$var" ]] && continue
@@ -336,6 +381,7 @@ MODES:
 FEATURES:
   - Auto-discovers COLMAP tools by running 'colmap --help'
   - Auto-discovers OpenMVS tools by scanning /usr/local/bin/OpenMVS
+  - Auto-discovers available SfM pipelines from stages/ subdirectories
   - Maps each environment variable to the tool it configures via stage-file
     association (only outputs help for vars that have a corresponding tool)
   - Copies tool --help output verbatim without parsing

@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
-DISPLAY_NAME="OpenMVS Densify"
-DEPENDENCIES=("05_openmvs_scene_export")
+DISPLAY_NAME="Densify"
+DEPENDENCIES=()
+FILE_DEPENDENCIES=("${WORK_DIR}/openmvs/scene.mvs")
 INPUTS=("${WORK_DIR}/openmvs/scene.mvs")
 OUTPUTS=("${WORK_DIR}/openmvs/scene_dense.mvs")
 

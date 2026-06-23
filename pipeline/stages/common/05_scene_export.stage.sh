@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
-DISPLAY_NAME="OpenMVS Scene Export"
-DEPENDENCIES=("04_colmap_undistortion")
+DISPLAY_NAME="COLMAP to OpenMVS Export"
+DEPENDENCIES=("04_undistortion")
 INPUTS=("${WORK_DIR}/colmap/dense")
 OUTPUTS=("${WORK_DIR}/openmvs/scene.mvs")
 

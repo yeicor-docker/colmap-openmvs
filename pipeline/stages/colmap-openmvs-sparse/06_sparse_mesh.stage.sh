@@ -1,0 +1,1 @@
+../common/06_sparse_mesh.stage.sh

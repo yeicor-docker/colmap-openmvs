@@ -25,6 +25,8 @@ USAGE: entrypoint [OPTIONS] [WORK_DIR]
 
 ARGUMENTS:
   WORK_DIR              Working directory (default: current dir)
+                        Must contain an images/ and/or videos/ subdirectory.
+                        Videos are automatically converted to keyframe images.
 
 OPTIONS:
   --help-entrypoint     Show this help
@@ -39,7 +41,8 @@ EXAMPLES:
   entrypoint /data
   entrypoint -v /data
   entrypoint --dry-run /data
-  entrypoint --skip 04_colmap_undistortion /data
+  entrypoint --skip 05_scene_export /data
+  SFM_PIPELINE=openmvs-full entrypoint /data
 EOF
     exit 0
 fi

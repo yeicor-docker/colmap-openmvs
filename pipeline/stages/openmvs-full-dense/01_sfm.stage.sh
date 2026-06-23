@@ -1,0 +1,1 @@
+../common/01_sfm.stage.sh
