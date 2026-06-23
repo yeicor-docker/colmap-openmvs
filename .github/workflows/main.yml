@@ -188,20 +188,15 @@ jobs:
         with:
           name: docker-image-cpu-${{ matrix.arch }}-Release-${{ needs.meta.outputs.tag }}
       - run: docker load -i docker-image-*.tar && rm docker-image-*.tar
-      - name: Download and extract test dataset (video)
+      - name: Generate synthetic test video
         run: |
           sudo apt-get update && sudo apt-get install -y ffmpeg
-          pipx install yt-dlp
           mkdir -p test_obj/videos
-          yt-dlp "https://www.youtube.com/watch?v=LyHdid1mm7o" \
-            -f 398 \
-            --download-sections "*4:36-4:40" \
-            -o "temp.mp4" \
-            --force-overwrites
-          ffmpeg -i temp.mp4 \
-            -vf "crop=iw/2:ih*3/5:(iw-iw/2)/2:(ih-ih*3/5)/2+ih*0.05" \
-            -an -c:v libx264 -y test_obj/videos/clip.mp4
-          rm -f temp.mp4
+          # Synthetic video with moving test pattern + grid for visual features
+          ffmpeg -y -f lavfi -i "testsrc2=size=1920x1080:rate=30:duration=4" \
+            -vf "drawgrid=w=iw/8:h=ih/8:c=white@0.3:t=1" \
+            -c:v libx264 -pix_fmt yuv420p -preset ultrafast \
+            test_obj/videos/test.mp4
       - name: Run docker container for testing (${{ matrix.pipeline }})
         timeout-minutes: 90
         run: docker run --user $(id -u):$(id -g) --rm -e SFM_PIPELINE=${{ matrix.pipeline }} -v ${{ github.workspace }}/test_obj:/work ${{ needs.meta.outputs.image }}:cpu-${{ matrix.arch }}-${{ needs.meta.outputs.tag }} /usr/bin/bash /entrypoint.sh /work -v
