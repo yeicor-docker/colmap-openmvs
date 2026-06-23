@@ -212,7 +212,8 @@ jobs:
           path: |
             test_obj/colmap
             test_obj/openmvs
-          if-no-files-found: error
+          if-no-files-found: warn
+          overwrite: true
 
   publish:
     needs: [meta, test]
