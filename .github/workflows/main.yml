@@ -188,33 +188,31 @@ jobs:
         with:
           name: docker-image-cpu-${{ matrix.arch }}-Release-${{ needs.meta.outputs.tag }}
       - run: docker load -i docker-image-*.tar && rm docker-image-*.tar
-      - name: Download and extract test dataset
+      - name: Download and extract test dataset (video)
         run: |
-          # CC BY-NC-SA 4.0: https://www.eth3d.net/datasets
-          mkdir -p test_obj/images tmp
-          curl -L -o dataset.7z https://www.eth3d.net/data/door_dslr_jpg.7z
-          7z x dataset.7z -otmp
-          find tmp -type f -name "*.JPG" -exec mv {} test_obj/images/ \;
-          # Downscale images to speed up testing
-          sudo apt-get update
-          sudo apt-get install -y imagemagick
-          find test_obj/images -type f -name "*.JPG" -exec mogrify -resize 25% {} \;
-          rm -rf tmp dataset.7z
+          sudo apt-get update && sudo apt-get install -y ffmpeg
+          pipx install yt-dlp
+          mkdir -p test_obj/videos
+          yt-dlp "https://www.youtube.com/watch?v=LyHdid1mm7o" \
+            -f 398 \
+            --download-sections "*4:36-4:40" \
+            -o "temp.mp4" \
+            --force-overwrites
+          ffmpeg -i temp.mp4 \
+            -vf "crop=iw/2:ih*3/5:(iw-iw/2)/2:(ih-ih*3/5)/2+ih*0.05" \
+            -an -c:v libx264 -y test_obj/videos/clip.mp4
+          rm -f temp.mp4
       - name: Run docker container for testing (${{ matrix.pipeline }})
         timeout-minutes: 90
-        run: docker run --user $UID:$GID --rm -e SFM_PIPELINE=${{ matrix.pipeline }} -v ${{ github.workspace }}/test_obj:/work ${{ needs.meta.outputs.image }}:cpu-${{ matrix.arch }}-${{ needs.meta.outputs.tag }} /usr/bin/bash /entrypoint.sh /work -v
+        run: docker run --user $(id -u):$(id -g) --rm -e SFM_PIPELINE=${{ matrix.pipeline }} -v ${{ github.workspace }}/test_obj:/work ${{ needs.meta.outputs.image }}:cpu-${{ matrix.arch }}-${{ needs.meta.outputs.tag }} /usr/bin/bash /entrypoint.sh /work -v
       - name: Upload openmvs results
         uses: actions/upload-artifact@v7
         with:
           name: test-output-${{ matrix.pipeline }}-${{ matrix.arch }}
-          path: test_obj/openmvs
+          path: |
+            test_obj/colmap
+            test_obj/openmvs
           if-no-files-found: error
-      - name: Upload colmap results
-        if: startsWith(matrix.pipeline, 'colmap-openmvs')
-        uses: actions/upload-artifact@v7
-        with:
-          name: test-output-${{ matrix.pipeline }}-${{ matrix.arch }}
-          path: test_obj/colmap
 
   publish:
     needs: [meta, test]
