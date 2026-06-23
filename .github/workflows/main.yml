@@ -188,12 +188,28 @@ jobs:
         with:
           name: docker-image-cpu-${{ matrix.arch }}-Release-${{ needs.meta.outputs.tag }}
       - run: docker load -i docker-image-*.tar && rm docker-image-*.tar
-      - name: Download test video
+      - name: Download ETH3D dataset and create test video
         run: |
-          mkdir -p test_obj/videos
-          curl -fL \
-            "https://github.com/${{ github.repository }}/releases/download/test-video-1/clip.mp4" \
-            -o test_obj/videos/clip.mp4
+          sudo apt-get update
+          sudo apt-get install -y ffmpeg imagemagick
+          # CC BY-NC-SA 4.0: https://www.eth3d.net/datasets
+          mkdir -p tmp_frames test_obj/videos
+          curl -L -o dataset.7z https://www.eth3d.net/data/door_dslr_jpg.7z
+          7z x dataset.7z -otmp
+          find tmp -type f -name "*.JPG" -exec mv {} tmp_frames/ \;
+          # Downscale to speed up testing
+          find tmp_frames -type f -name "*.JPG" -exec mogrify -resize 25% {} \;
+          rm -rf tmp dataset.7z
+          # Rename frames to sequential numbers for reliable ordering
+          i=0; for f in $(find tmp_frames -name '*.JPG' -print | sort); do
+            mv "$f" "tmp_frames/$(printf '%06d' $i).jpg"
+            i=$((i+1))
+          done
+          # Create video from the numbered image sequence (2 fps)
+          ffmpeg -framerate 2 -i 'tmp_frames/%06d.jpg' \
+            -c:v libx264 -pix_fmt yuv420p -preset ultrafast -y \
+            test_obj/videos/dataset.mp4
+          rm -rf tmp_frames
       - name: Run docker container for testing (${{ matrix.pipeline }})
         timeout-minutes: 90
         run: docker run --user $(id -u):$(id -g) --rm -e SFM_PIPELINE=${{ matrix.pipeline }} -v ${{ github.workspace }}/test_obj:/work ${{ needs.meta.outputs.image }}:cpu-${{ matrix.arch }}-${{ needs.meta.outputs.tag }} /usr/bin/bash /entrypoint.sh /work -v
