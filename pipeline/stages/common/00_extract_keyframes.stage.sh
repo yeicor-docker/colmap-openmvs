@@ -56,6 +56,14 @@ run_stage_function() {
         mkdir -p "$temp_dir"
 
         log "Extracting keyframes from: $basename"
+        # Auto-detect detector type only if not overridden via EXTRACT_KEYFRAMES_ARGS
+        if ! echo " ${EXTRACT_KEYFRAMES_ARGS:-} " | grep -qE '[-]{1,2}t[ =]|detector-type[ =]'; then
+            local detector_type="SIFTGPU"
+            if ! command -v nvidia-smi &>/dev/null; then
+                detector_type="SIFT"
+            fi
+            EXTRACT_KEYFRAMES_ARGS="-t ${detector_type} ${EXTRACT_KEYFRAMES_ARGS}"
+        fi
         ExtractKeyframes \
             -i "$video" \
             -d "$temp_dir" \
@@ -63,6 +71,7 @@ run_stage_function() {
 
         # Rename and convert extracted frames (removes temp files)
         local frame_idx=1
+        set +x 2>/dev/null  # Suppress verbose tracing inside per-frame loop
         while IFS= read -r -d '' frame; do
             local ext="${frame##*.}"
             local ext_lower
@@ -86,6 +95,7 @@ run_stage_function() {
 
             ((frame_idx++))
         done < <(find "$temp_dir" -type f -print0 | sort -z)
+        set -x 2>/dev/null  # Re-enable verbose tracing
 
         # Cleanup temporary extraction directory
         rm -rf "$temp_dir"
