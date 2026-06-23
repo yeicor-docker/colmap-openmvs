@@ -300,7 +300,7 @@ main() {
     # Must run after config sourcing so SFM_PIPELINE overrides are respected.
     {
         local _pipeline="${SFM_PIPELINE:-colmap-openmvs-sparse}"
-        echo -n "::remaining_groups::Config,Tool Discovery"
+        echo -n "::remaining_groups::"
         while IFS= read -r _stage_file; do
             local _display_name
             _display_name=$(grep -m1 '^DISPLAY_NAME=' "$_stage_file" 2>/dev/null | cut -d= -f2 | tr -d '"' || basename "$_stage_file" .stage.sh)
