@@ -293,35 +293,42 @@ main() {
 
     log_group "file=pipeline.sh,section=tools" "Tool Discovery"
     eval "$(${SCRIPT_DIR}/discover.sh --print-vars-shell)" || { log_err "Failed to discover tools"; exit 1; }
-    log_endgroup
 
-    # Print remaining groups annotation early so consumers (e.g. GitHub Actions UI)
-    # can render the full stage list before execution starts.
-    # Must run after config sourcing so SFM_PIPELINE overrides are respected.
+    # Print remaining groups annotation early so consumers can render the full
+    # stage list before execution starts. Must run after config sourcing so
+    # PIPELINE overrides are respected.
     {
-        local _pipeline="${SFM_PIPELINE:-colmap-openmvs-sparse}"
+        local _pipeline="${PIPELINE:-colmap-openmvs-sparse}"
         echo -n "::remaining_groups::"
+        local _first=1
         while IFS= read -r _stage_file; do
+            if [[ $_first -eq 1 ]]; then
+                _first=0
+            else
+                echo -n ","
+            fi
             local _display_name
             _display_name=$(grep -m1 '^DISPLAY_NAME=' "$_stage_file" 2>/dev/null | cut -d= -f2 | tr -d '"' || basename "$_stage_file" .stage.sh)
-            echo -n ",$_display_name"
+            echo -n "$_display_name"
         done < <(find "${STAGES_DIR}/${_pipeline}" -maxdepth 1 -name "*.stage.sh" | sort 2>/dev/null)
         echo ""
     }
+
+    log_endgroup
 
     ############################################################################
     # Execute stages
     ############################################################################
 
     # Print a stages overview before starting
-    local pipeline="${SFM_PIPELINE:-colmap-openmvs-sparse}"
+    local pipeline="${PIPELINE:-colmap-openmvs-sparse}"
     local pipeline_dir="${STAGES_DIR}/${pipeline}"
     readarray -t stages < <(find "${pipeline_dir}" -maxdepth 1 -name "*.stage.sh" | sort)
     if [[ ${#stages[@]} -eq 0 ]]; then
         log_err "No stages found in ${pipeline_dir}"
         exit 1
     fi
-    log "Pipeline: ${#stages[@]} stages loaded (SFM_PIPELINE=${pipeline})"
+    log "Pipeline: ${#stages[@]} stages loaded (PIPELINE=${pipeline})"
 
     stage_count=0
 

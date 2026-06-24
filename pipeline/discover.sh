@@ -200,7 +200,7 @@ get_custom_var_help() {
         EXTRACT_KEYFRAMES_REMOVE_VIDEOS)
             echo "If set to true, deletes video files from videos/ after successful keyframe extraction."
             ;;
-        SFM_PIPELINE)
+        PIPELINE)
             local pipelines
             pipelines=$(discover_pipelines | tr '\n' ', ' | sed 's/,$//' | sed 's/,/, /g')
             echo "Selects the SfM pipeline to use. Auto-discovered from subdirectories in stages/ (excludes common/ and lib/). Available: ${pipelines:-none}. Default: colmap-openmvs-sparse."
@@ -272,10 +272,10 @@ generate_help_yaml() {
     var_to_type["COLMAP_MAPPER"]="custom"
     var_to_type["COLMAP_MATCHER"]="custom"
     var_to_type["EXTRACT_KEYFRAMES_REMOVE_VIDEOS"]="custom"
-    var_to_type["SFM_PIPELINE"]="custom"
+    var_to_type["PIPELINE"]="custom"
 
     # Merge auto-discovered vars with registered custom vars so all appear in output
-    # even if not referenced in any stage file (e.g. SFM_PIPELINE)
+    # even if not referenced in any stage file (e.g. PIPELINE)
     if [[ -n "$all_vars" ]]; then
         while IFS= read -r var; do
             [[ -z "$var" ]] && continue
@@ -337,7 +337,7 @@ generate_vars_shell() {
     local custom_vars="COLMAP_MAPPER
 COLMAP_MATCHER
 EXTRACT_KEYFRAMES_REMOVE_VIDEOS
-SFM_PIPELINE"
+PIPELINE"
 
     # Merge and deduplicate
     if [[ -n "$all_env_vars" ]]; then
