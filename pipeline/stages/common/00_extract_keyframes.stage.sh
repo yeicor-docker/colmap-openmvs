@@ -34,7 +34,7 @@ run_stage_function() {
         # Check if frames for this video already exist and are up-to-date
         local video_mtime
         video_mtime=$(stat -c '%Y' "$video")
-        local oldest_frame_mtime=0
+        local oldest_frame_mtime=9999999999
         local has_frames=0
         for f in "${IMAGES_DIR}/${video_name}_frame_"*; do
             if [[ -f "$f" ]]; then
