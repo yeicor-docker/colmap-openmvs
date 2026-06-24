@@ -11,7 +11,7 @@ If you just want an easy-to-use cross-platform app, see [colmap-openmvs-app](htt
 - **Latest Development Versions**: Always up-to-date with automated, tested builds.
 - **Dockerized**: Run anywhere with a single command; no dependency hell.
 - **Intelligent Caching**: Only re-runs steps when inputs change.
-- **Pluggable Pipelines**: Choose between COLMAP-based or OpenMVS-native SfM, with sparse or dense variants, via the `SFM_PIPELINE` environment variable.
+- **Pluggable Pipelines**: Choose between COLMAP-based or OpenMVS-native SfM, with sparse or dense variants, via the `PIPELINE` environment variable.
 - **Verbose Logging & Dry-Run**: Debug and inspect every step, or simulate runs without execution.
 - **User Mapping**: Use `-u $(id -u):$(id -g)` for proper file permissions on output.
 - **Comprehensive Help**: `--help` provides detailed info about all embedded tools and configuration options.
@@ -59,37 +59,5 @@ docker run --rm -it --gpus all -u $(id -u):$(id -g) \
   -v /your/data/path:/data \
   yeicor/colmap-openmvs:cuda-latest /data
 ```
-
-### Choosing a Pipeline
-
-Use the `SFM_PIPELINE` environment variable to select which pipeline to run. Available pipelines are auto-discovered from subdirectories in `/pipeline/stages/` (excluding `common/` and `lib/`):
-
-| Pipeline | SfM Backend | Stages |
-|---|---|---|
-| `colmap-openmvs-sparse` (default) | COLMAP | SfM → sparse mesh → refinement → texture |
-| `colmap-openmvs-dense` | COLMAP | SfM → densification → dense mesh → refinement → texture |
-| `openmvs-full-sparse` | OpenMVS | SfM → sparse mesh → refinement → texture |
-| `openmvs-full-dense` | OpenMVS | SfM → densification → dense mesh → refinement → texture |
-
-The `-sparse` variants stop after producing the sparse mesh (good for quick previews or when only a lightweight mesh is needed). The `-dense` variants skip sparse mesh and go directly to densification (useful when you only need the high-resolution result).
-
-```sh
-# Default (COLMAP-based SfM, sparse)
-docker run --rm -it -u $(id -u):$(id -g) \
-  -v /your/data/path:/data \
-  yeicor/colmap-openmvs:cpu-latest /data
-
-# OpenMVS-native SfM, dense
-docker run --rm -it -e SFM_PIPELINE=openmvs-full-dense -u $(id -u):$(id -g) \
-  -v /your/data/path:/data \
-  yeicor/colmap-openmvs:cpu-latest /data
-
-# COLMAP-based SfM, dense
-docker run --rm -it -e SFM_PIPELINE=colmap-openmvs-dense -u $(id -u):$(id -g) \
-  -v /your/data/path:/data \
-  yeicor/colmap-openmvs:cpu-latest /data
-```
-
-Run `--help` for up-to-date documentation of all configurable variables.
 
 Happy reconstructing!

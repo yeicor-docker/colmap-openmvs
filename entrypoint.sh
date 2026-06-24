@@ -42,7 +42,6 @@ EXAMPLES:
   entrypoint -v /data
   entrypoint --dry-run /data
   entrypoint --skip 05_scene_export /data
-  SFM_PIPELINE=openmvs-full entrypoint /data
 EOF
     exit 0
 fi
