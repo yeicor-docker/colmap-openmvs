@@ -188,27 +188,28 @@ find_env_vars_for_tool() {
 # which subcommand to run rather than passing arguments to one.
 ################################################################################
 
+# Single source of truth for all custom (non-ARGS) environment variables.
+# Outputs tab-separated lines: NAME<tab>DESCRIPTION
+# Use get_custom_var_names() / get_custom_var_help() to extract specific fields.
+get_custom_vars() {
+    local pipelines
+    pipelines=$(discover_pipelines 2>/dev/null | tr '\n' ', ' | sed 's/,$//' | sed 's/,/, /g') || true
+    cat <<-EOF
+COLMAP_MAPPER	Selects COLMAP mapper algorithm. Options: mapper (alias), global_mapper (default, recommended), hierarchical_mapper. When using global_mapper, the pipeline automatically runs view_graph_calibrator on a copy of the database to improve focal length priors. See COLMAP_SKIP_VIEW_GRAPH_CALIBRATOR.
+COLMAP_MATCHER	Selects COLMAP feature matcher. Options: exhaustive_matcher, sequential_matcher, spatial_matcher, transitive_matcher, vocab_tree_matcher (default).
+COLMAP_SKIP_VIEW_GRAPH_CALIBRATOR	If set to 1, skip the view_graph_calibrator step even when using global_mapper. By default (0), view_graph_calibrator is run before global_mapper to calibrate intrinsics from the view graph.
+EXTRACT_KEYFRAMES_REMOVE_VIDEOS	If set to true, deletes video files from videos/ after successful keyframe extraction.
+PIPELINE	Selects the SfM pipeline to use. Auto-discovered from subdirectories in stages/ (excludes common/ and lib/). Available: ${pipelines:-none}. Default: colmap-openmvs-sparse.
+EOF
+}
+
+get_custom_var_names() {
+    get_custom_vars | cut -f1
+}
+
 get_custom_var_help() {
     local var="$1"
-    case "$var" in
-        COLMAP_MAPPER)
-            echo "Selects COLMAP mapper algorithm. Options: mapper (alias), global_mapper (default, recommended)."
-            ;;
-        COLMAP_MATCHER)
-            echo "Selects COLMAP feature matcher. Options: exhaustive_matcher, sequential_matcher, spatial_matcher, transitive_matcher, vocab_tree_matcher (default)."
-            ;;
-        EXTRACT_KEYFRAMES_REMOVE_VIDEOS)
-            echo "If set to true, deletes video files from videos/ after successful keyframe extraction."
-            ;;
-        PIPELINE)
-            local pipelines
-            pipelines=$(discover_pipelines | tr '\n' ', ' | sed 's/,$//' | sed 's/,/, /g')
-            echo "Selects the SfM pipeline to use. Auto-discovered from subdirectories in stages/ (excludes common/ and lib/). Available: ${pipelines:-none}. Default: colmap-openmvs-sparse."
-            ;;
-        *)
-            return 1
-            ;;
-    esac
+    awk -F'\t' -v var="$var" '$1 == var { sub(/^[^\t]+\t/, ""); print; found=1 } END { exit !found }' <(get_custom_vars)
 }
 
 ################################################################################
@@ -269,10 +270,10 @@ generate_help_yaml() {
     done <<< "$mapping"
 
     # Custom selector/flag variables (no tool --help to query)
-    var_to_type["COLMAP_MAPPER"]="custom"
-    var_to_type["COLMAP_MATCHER"]="custom"
-    var_to_type["EXTRACT_KEYFRAMES_REMOVE_VIDEOS"]="custom"
-    var_to_type["PIPELINE"]="custom"
+    while IFS= read -r _custom_var; do
+        [[ -z "$_custom_var" ]] && continue
+        var_to_type["$_custom_var"]="custom"
+    done < <(get_custom_var_names)
 
     # Merge auto-discovered vars with registered custom vars so all appear in output
     # even if not referenced in any stage file (e.g. PIPELINE)
@@ -334,10 +335,10 @@ generate_vars_shell() {
     all_env_vars=$(discover_env_vars_from_stages)
 
     # Always include custom selector/flag variables even if not in stage files
-    local custom_vars="COLMAP_MAPPER
-COLMAP_MATCHER
-EXTRACT_KEYFRAMES_REMOVE_VIDEOS
-PIPELINE"
+    # Always include custom selector/flag variables even if not in stage files
+    # (sourced from get_custom_var_names to avoid duplication)
+    local custom_vars
+    custom_vars=$(get_custom_var_names)
 
     # Merge and deduplicate
     if [[ -n "$all_env_vars" ]]; then
