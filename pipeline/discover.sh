@@ -271,7 +271,6 @@ get_custom_var_names() {
 
 get_custom_var_help() {
     local var="$1"
-
     awk -v var="$var" '
         /^BEGIN_VAR$/ {
             getline name
