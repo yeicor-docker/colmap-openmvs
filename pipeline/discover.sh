@@ -312,7 +312,7 @@ Available:
 ${pipeline_options}
 
 Default:
-colmap-openmvs-sparse
+colmap-openmvs-dense
 END_VAR
 EOF
 }
