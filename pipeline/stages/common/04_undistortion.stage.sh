@@ -12,5 +12,5 @@ run_stage_function() {
         --input_path sparse/0 \
         --output_path dense \
         --output_type COLMAP \
-        ${COLMAP_UNDISTORTER_ARGS}
+        ${COLMAP_IMAGE_UNDISTORTER_ARGS}
 }

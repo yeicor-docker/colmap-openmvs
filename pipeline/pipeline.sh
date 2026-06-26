@@ -298,7 +298,7 @@ main() {
     # stage list before execution starts. Must run after config sourcing so
     # PIPELINE overrides are respected.
     {
-        local _pipeline="${PIPELINE:-colmap-openmvs-sparse}"
+        local _pipeline="${PIPELINE:-colmap-openmvs-dense}"
         echo -n "::remaining_groups::"
         local _first=1
         while IFS= read -r _stage_file; do
@@ -321,7 +321,7 @@ main() {
     ############################################################################
 
     # Print a stages overview before starting
-    local pipeline="${PIPELINE:-colmap-openmvs-sparse}"
+    local pipeline="${PIPELINE:-colmap-openmvs-dense}"
     local pipeline_dir="${STAGES_DIR}/${pipeline}"
     readarray -t stages < <(find "${pipeline_dir}" -maxdepth 1 -name "*.stage.sh" | sort)
     if [[ ${#stages[@]} -eq 0 ]]; then

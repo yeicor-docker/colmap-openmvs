@@ -1,0 +1,1 @@
+../common/00_extract_keyframes.stage.sh

@@ -178,8 +178,26 @@ find_env_vars_for_tool() {
     [[ -z "$check_file" ]] && return 0
     local -a check_files
     mapfile -t check_files <<< "$check_file"
-    grep -h -oP '\$\{[A-Z_][A-Z0-9_]*_ARGS\}' "${check_files[@]}" 2>/dev/null | \
-        sed 's/[${}]//g' | sort -u || true
+    grep -h -oP '\$\{[A-Z_][A-Z0-9_]*_ARGS(:-[^}]*)?\}' "${check_files[@]}" 2>/dev/null | \
+        sed 's/[\${}]//g; s/:-.*//' | sort -u | while IFS= read -r var; do
+            # Normalize: remove _ARGS suffix and all underscores, lowercase
+            local var_norm
+            var_norm="$(echo "$var" | sed 's/_ARGS$//' | tr -d '_' | tr '[:upper:]' '[:lower:]')"
+            # Remove project prefixes (colmap, openmvs)
+            if [[ "$var_norm" == "colmap"* ]]; then
+                var_norm="${var_norm#colmap}"
+            fi
+            if [[ "$var_norm" == "openmvs"* ]]; then
+                var_norm="${var_norm#openmvs}"
+            fi
+            # Normalize tool name same way: remove underscores, lowercase
+            local tool_norm
+            tool_norm="$(echo "$tool_name" | tr -d '_' | tr '[:upper:]' '[:lower:]')"
+            # Only emit the var if its stripped name matches the tool name exactly
+            if [[ "$var_norm" == "$tool_norm" ]]; then
+                echo "$var"
+            fi
+        done || true
 }
 
 ################################################################################
@@ -217,6 +235,11 @@ When using global_mapper, the pipeline automatically runs view_graph_calibrator
 on a copy of the database to improve focal length priors.
 
 See COLMAP_SKIP_VIEW_GRAPH_CALIBRATOR.
+
+Corresponding _ARGS variables (per subcommand):
+  - COLMAP_MAPPER_ARGS              (for: mapper)
+  - COLMAP_GLOBAL_MAPPER_ARGS       (for: global_mapper)
+  - COLMAP_HIERARCHICAL_MAPPER_ARGS (for: hierarchical_mapper)
 END_VAR
 
 BEGIN_VAR
@@ -229,6 +252,40 @@ Options:
   - spatial_matcher
   - transitive_matcher
   - vocab_tree_matcher (default)
+
+All matchers share the same base options (--database_path, --FeatureMatching.*,
+etc.) and expose their own unique options (--ExhaustiveMatching.*,
+--VocabTreeMatching.*, --SequentialMatching.*, etc.) with no conflicts
+between them.
+
+Corresponding _ARGS variables (per subcommand):
+  - COLMAP_EXHAUSTIVE_MATCHER_ARGS  (for: exhaustive_matcher)
+  - COLMAP_SEQUENTIAL_MATCHER_ARGS  (for: sequential_matcher)
+  - COLMAP_SPATIAL_MATCHER_ARGS     (for: spatial_matcher)
+  - COLMAP_TRANSITIVE_MATCHER_ARGS  (for: transitive_matcher)
+  - COLMAP_VOCAB_TREE_MATCHER_ARGS  (for: vocab_tree_matcher)
+END_VAR
+
+BEGIN_VAR
+COLMAP_MESHER
+Selects the COLMAP surface reconstruction method.
+
+Options:
+  - poisson_mesher (default)
+  - delaunay_mesher
+
+The mesher stage consumes the fused point cloud from stereo_fusion (stage 06)
+and produces a mesh. Poisson mesher takes the fused PLY directly; Delaunay
+mesher reads the workspace (which includes fused.ply).
+
+Output files:
+  - meshed-poisson.ply   (when using poisson_mesher)
+  - meshed-delaunay.ply  (when using delaunay_mesher)
+  - meshed.ply (symlink) always points to the latest built mesh
+
+Corresponding _ARGS variables (per subcommand):
+  - COLMAP_POISSON_MESHER_ARGS  (for: poisson_mesher)
+  - COLMAP_DELAUNAY_MESHER_ARGS (for: delaunay_mesher)
 END_VAR
 
 BEGIN_VAR
@@ -255,7 +312,7 @@ Available:
 ${pipeline_options}
 
 Default:
-colmap-openmvs-sparse
+colmap-openmvs-dense
 END_VAR
 EOF
 }

@@ -9,6 +9,12 @@ run_stage_function() {
     mkdir -p sparse
 
     local mapper="${COLMAP_MAPPER:-global_mapper}"
+    local mapper_args=""
+    case "$mapper" in
+        mapper)              mapper_args="${COLMAP_MAPPER_ARGS:-}" ;;
+        global_mapper)       mapper_args="${COLMAP_GLOBAL_MAPPER_ARGS:-}" ;;
+        hierarchical_mapper) mapper_args="${COLMAP_HIERARCHICAL_MAPPER_ARGS:-}" ;;
+    esac
 
     if [[ "$mapper" == "global_mapper" ]] && [[ "${COLMAP_SKIP_VIEW_GRAPH_CALIBRATOR:-0}" != "1" ]]; then
         # Calibrate intrinsics from the view graph to improve global mapper
@@ -26,12 +32,12 @@ run_stage_function() {
             --image_path "${IMAGES_DIR}" \
             --database_path database_global.db \
             --output_path sparse \
-            ${COLMAP_MAPPER_ARGS}
+            $mapper_args
     else
-        colmap ${mapper} \
+        colmap "$mapper" \
             --image_path "${IMAGES_DIR}" \
             --database_path database.db \
             --output_path sparse \
-            ${COLMAP_MAPPER_ARGS}
+            $mapper_args
     fi
 }

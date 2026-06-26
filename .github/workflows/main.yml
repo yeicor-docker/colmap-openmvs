@@ -175,7 +175,7 @@ jobs:
       fail-fast: false
       matrix:
         arch: [amd64, arm64]
-        pipeline: [colmap-openmvs-sparse, colmap-openmvs-dense, openmvs-full-sparse, openmvs-full-dense]
+        pipeline: [colmap-openmvs-sparse, colmap-openmvs-dense, openmvs-full-sparse, openmvs-full-dense] # colmap-full-gpu-only requires GPU
         include:
           # Native runners
           - arch: amd64
