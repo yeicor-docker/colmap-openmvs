@@ -15,6 +15,10 @@ on:
     branches: [main, "renovate/*"]
   pull_request:
 
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event_name == 'pull_request' && github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
 jobs:
   meta:
     runs-on: ubuntu-24.04
@@ -92,6 +96,8 @@ jobs:
       - name: Set up Buildx
         id: setup-buildx
         uses: docker/setup-buildx-action@v4
+      - name: Free Docker disk space before compilation
+        run: docker system prune --force --all --volumes
       - name: Download vcpkg cache artifact
         if: ${{ github.event.inputs.no_cache != 'true' }}
         uses: yeicor/action-download-artifact@v1.0.1
@@ -132,6 +138,9 @@ jobs:
               --tag ${{ needs.meta.outputs.image }}:${{ matrix.variant }}${IMAGE_SUFFIX}-${{ matrix.arch }}-${{ needs.meta.outputs.tag }} \
               --load .
           fi
+      - name: Remove submodule checkouts (source already in Docker layers)
+        run: |
+          rm -rf colmap openMVS vcpkg vcpkg_ports
       - name: Docker cache mounts (extract)
         if: "!cancelled()"
         uses: reproducible-containers/buildkit-cache-dance@v3
@@ -162,6 +171,7 @@ jobs:
             IMAGE_SUFFIX="-debug"
           fi
           docker save ${{ needs.meta.outputs.image }}:${{ matrix.variant }}${IMAGE_SUFFIX}-${{ matrix.arch }}-${{ needs.meta.outputs.tag }} -o docker-image-${{ matrix.variant }}-${{ matrix.arch }}-${{ matrix.build_type }}-${{ needs.meta.outputs.tag }}.tar
+          docker rmi ${{ needs.meta.outputs.image }}:${{ matrix.variant }}${IMAGE_SUFFIX}-${{ matrix.arch }}-${{ needs.meta.outputs.tag }}
       - name: Upload built image as artifact
         uses: actions/upload-artifact@v7
         with:
