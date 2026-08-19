@@ -80,7 +80,7 @@ jobs:
     runs-on: ${{ matrix.runner }}
     steps:
       - name: Free Disk Space - Ubuntu Runners
-        uses: endersonmenezes/free-disk-space@v3
+        uses: endersonmenezes/free-disk-space@v4
         with:
           remove_android: true
           remove_dotnet: true
