@@ -127,38 +127,8 @@ jobs:
             fi
 
             # Prune vcpkg-binary to max 5GB by evicting oldest archives
-            VCPKG_BIN="cache-mounts/opt/vcpkg/cache/vcpkg-binary"
-            if [ -d "$VCPKG_BIN" ]; then
-              python3 -c '
-                import os, sys
-                d = sys.argv[1]
-                max_b = int(sys.argv[2])
-                files = []
-                tot = 0
-                for root, _, fnames in os.walk(d):
-                    for f in fnames:
-                        if f.endswith(".zip"):
-                            p = os.path.join(root, f)
-                            try:
-                                st = os.stat(p)
-                                files.append((st.st_mtime, st.st_size, p))
-                                tot += st.st_size
-                            except OSError:
-                                pass
-                print(f"vcpkg-binary size: {tot / (1024**3):.2f} GB (target max: {max_b / (1024**3):.2f} GB)")
-                if tot > max_b:
-                    files.sort(key=lambda x: x[0])
-                    for _, sz, p in files:
-                        if tot <= max_b:
-                            break
-                        try:
-                            os.remove(p)
-                            tot -= sz
-                        except OSError:
-                            pass
-                    print(f"vcpkg-binary size after LRU pruning: {tot / (1024**3):.2f} GB")
-                ' "$VCPKG_BIN" 5368709120
-              find "$VCPKG_BIN" -type d -empty -delete || true
+            if [ -d cache-mounts/opt/vcpkg/cache/vcpkg-binary ]; then
+              python3 scripts/prune_cache.py --cache-dir cache-mounts/opt/vcpkg/cache/vcpkg-binary --max-bytes 5368709120
             fi
 
             # Prune old apt deb archives older than 14 days if present
