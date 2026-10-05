@@ -64,6 +64,7 @@ RUN --mount=type=cache,target=/var/cache/apt,sharing=locked \
 ###############################################################################
 COPY vcpkg ${VCPKG_ROOT}
 COPY vcpkg_ports "${VCPKG_ROOT}/../vcpkg_ports"
+COPY scripts /scripts
 RUN cd ${VCPKG_ROOT} && ./bootstrap-vcpkg.sh -disableMetrics && rm -rf .git
 
 ###############################################################################
@@ -202,41 +203,8 @@ RUN --mount=type=cache,target=/opt/vcpkg/cache,sharing=locked \
     cp -r /usr/local/bin/OpenMVS /build/install/bin/OpenMVS; \
     grep -shoE '[0-9a-f]{64}' "$LOG" openMVS/mybuild/vcpkg-manifest-install.log >> /tmp/vcpkg-used-abis.txt 2>/dev/null || true; \
     rm -rf openMVS/mybuild; \
-    if [ -f /tmp/vcpkg-used-abis.txt ]; then \
-      sort -u /tmp/vcpkg-used-abis.txt | while read -r h; do \
-        f="${VCPKG_DEFAULT_BINARY_CACHE}/${h:0:2}/${h}.zip"; \
-        [ -f "$f" ] && touch "$f"; \
-      done; \
-      rm -f /tmp/vcpkg-used-abis.txt; \
-    fi; \
-    python3 -c "
-import os, sys
-d = sys.argv[1]
-max_b = int(sys.argv[2])
-files = []
-tot = 0
-for root, _, fnames in os.walk(d):
-    for f in fnames:
-        if f.endswith('.zip'):
-            p = os.path.join(root, f)
-            try:
-                st = os.stat(p)
-                files.append((st.st_mtime, st.st_size, p))
-                tot += st.st_size
-            except OSError:
-                pass
-if tot > max_b:
-    files.sort(key=lambda x: x[0])
-    for _, sz, p in files:
-        if tot <= max_b:
-            break
-        try:
-            os.remove(p)
-            tot -= sz
-        except OSError:
-            pass
-" "${VCPKG_DEFAULT_BINARY_CACHE}" 5368709120; \
-    find "${VCPKG_DEFAULT_BINARY_CACHE}" -type d -empty -delete 2>/dev/null || true; \
+    python3 /scripts/prune_cache.py --cache-dir "${VCPKG_DEFAULT_BINARY_CACHE}" --max-bytes 5368709120 --touch-abis /tmp/vcpkg-used-abis.txt; \
+    rm -f /tmp/vcpkg-used-abis.txt; \
     ccache --cleanup; \
     ccache --show-stats --verbose
 
