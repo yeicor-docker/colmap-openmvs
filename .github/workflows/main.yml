@@ -107,6 +107,70 @@ jobs:
           path: cache-mounts
           if_no_artifact_found: ignore
           use_unzip: true
+      - name: Prune downloaded cache on host
+        if: ${{ github.event.inputs.no_cache != 'true' }}
+        run: |
+          set -eux
+          echo "=== Disk usage before pruning downloaded cache ==="
+          df -h /
+          if [ -d cache-mounts ]; then
+            echo "Initial cache-mounts size:"
+            du -sh cache-mounts || true
+
+            # Remove stale build trees that should never be persisted
+            rm -rf cache-mounts/build
+
+            # Prune ccache to max 5GB if ccache tool is available on host
+            if [ -d cache-mounts/opt/vcpkg/cache/ccache ] && command -v ccache >/dev/null 2>&1; then
+              CCACHE_DIR="$(pwd)/cache-mounts/opt/vcpkg/cache/ccache" ccache -M 5G || true
+              CCACHE_DIR="$(pwd)/cache-mounts/opt/vcpkg/cache/ccache" ccache -c || true
+            fi
+
+            # Prune vcpkg-binary to max 5GB by evicting oldest archives
+            VCPKG_BIN="cache-mounts/opt/vcpkg/cache/vcpkg-binary"
+            if [ -d "$VCPKG_BIN" ]; then
+              python3 -c '
+                import os, sys
+                d = sys.argv[1]
+                max_b = int(sys.argv[2])
+                files = []
+                tot = 0
+                for root, _, fnames in os.walk(d):
+                    for f in fnames:
+                        if f.endswith(".zip"):
+                            p = os.path.join(root, f)
+                            try:
+                                st = os.stat(p)
+                                files.append((st.st_mtime, st.st_size, p))
+                                tot += st.st_size
+                            except OSError:
+                                pass
+                print(f"vcpkg-binary size: {tot / (1024**3):.2f} GB (target max: {max_b / (1024**3):.2f} GB)")
+                if tot > max_b:
+                    files.sort(key=lambda x: x[0])
+                    for _, sz, p in files:
+                        if tot <= max_b:
+                            break
+                        try:
+                            os.remove(p)
+                            tot -= sz
+                        except OSError:
+                            pass
+                    print(f"vcpkg-binary size after LRU pruning: {tot / (1024**3):.2f} GB")
+                ' "$VCPKG_BIN" 5368709120
+              find "$VCPKG_BIN" -type d -empty -delete || true
+            fi
+
+            # Prune old apt deb archives older than 14 days if present
+            if [ -d cache-mounts/var/cache/apt ]; then
+              find cache-mounts/var/cache/apt -name "*.deb" -mtime +14 -delete 2>/dev/null || true
+            fi
+
+            echo "Pruned cache-mounts size:"
+            du -sh cache-mounts || true
+          fi
+          echo "=== Disk usage after pruning downloaded cache ==="
+          df -h /
       - name: Docker cache mounts (restore)
         uses: reproducible-containers/buildkit-cache-dance@v3
         with:
@@ -150,6 +214,13 @@ jobs:
           dockerfile: Dockerfile
         env:
           STATE_POST: "true"
+      - name: Post-extract cache cleanup
+        if: "!cancelled()"
+        run: |
+          rm -rf cache-mounts/build
+          find cache-mounts -type d -empty -delete 2>/dev/null || true
+          echo "Cache mounts to upload size:"
+          du -sh cache-mounts || true
       - name: Disable post docker cache mounts (extract)
         run: echo "" > Dockerfile
       - name: Upload docker cache mounts
@@ -161,9 +232,12 @@ jobs:
             cache-mounts
             !cache-mounts/**/*:*
           retention-days: 7
-      - name: Save some disk space
+      - name: Free disk space before image export
         run: |
           rm -rf cache-mounts
+          docker builder prune --force || true
+          echo "=== Disk usage before docker save ==="
+          df -h /
       - name: Save built image as artifact
         run: |
           IMAGE_SUFFIX=""
@@ -231,6 +305,7 @@ jobs:
             test_obj/colmap
             test_obj/openmvs
           if-no-files-found: error
+          retention-days: 2
 
   publish:
     needs: [meta, test]

@@ -24,14 +24,17 @@ WORKDIR /build
 SHELL ["/bin/bash", "-c"]
 
 ENV VCPKG_DEFAULT_BINARY_CACHE=${VCPKG_ROOT}/cache/vcpkg-binary \
-    CCACHE_DIR=${VCPKG_ROOT}/cache/ccache
+    CCACHE_DIR=${VCPKG_ROOT}/cache/ccache \
+    CCACHE_MAXSIZE=5G
 
 ###############################################################################
 # System dependencies
 ###############################################################################
 RUN --mount=type=cache,target=/var/cache/apt,sharing=locked \
     --mount=type=cache,target=/var/lib/apt,sharing=locked \
-    set -eux; rm -f /etc/apt/apt.conf.d/docker-clean; \
+    set -eux; \
+    rm -f /etc/apt/apt.conf.d/docker-clean; \
+    echo 'Binary::apt::APT::Keep-Downloaded-Packages "true";' > /etc/apt/apt.conf.d/keep-cache; \
     APT_CMD="apt-get update && apt-get install -y --no-install-recommends \
         build-essential \
         gfortran \
@@ -53,7 +56,8 @@ RUN --mount=type=cache,target=/var/cache/apt,sharing=locked \
         libxinerama-dev libxcursor-dev xorg-dev \
         libxrandr-dev \
         libavcodec-dev libavformat-dev libavutil-dev libswscale-dev libswresample-dev"; \
-    for attempt in 1 2 3; do sh -c "$APT_CMD" && break || ([ $attempt -lt 3 ] && sleep 5); done
+    for attempt in 1 2 3; do sh -c "$APT_CMD" && break || ([ $attempt -lt 3 ] && sleep 5); done; \
+    apt-get autoclean
 
 ###############################################################################
 # vcpkg (stable layer)
@@ -100,7 +104,6 @@ RUN set -eux; \
 ###############################################################################
 COPY colmap colmap
 RUN --mount=type=cache,target=/opt/vcpkg/cache,sharing=locked \
-    --mount=type=cache,target=/build/colmap/mybuild,sharing=locked \
     set -Eeuo pipefail; \
     export TRIPLET="$(uname -m | sed 's/x86_64/x64/;s/aarch64/arm64/')-linux"; \
     if [ "$BUILD_TYPE" = "Release" ]; then \
@@ -148,15 +151,15 @@ RUN --mount=type=cache,target=/opt/vcpkg/cache,sharing=locked \
     fi; \
     cmake --build colmap/mybuild -j$(nproc); \
     cmake --install colmap/mybuild --prefix /build/install; \
+    grep -shoE '[0-9a-f]{64}' "$LOG" colmap/mybuild/vcpkg-manifest-install.log >> /tmp/vcpkg-used-abis.txt 2>/dev/null || true; \
     ccache --show-stats --verbose; \
-    rm -r "colmap/mybuild/vcpkg_installed"
+    rm -rf colmap/mybuild
 
 ###############################################################################
 # Build OpenMVS
 ###############################################################################
 COPY openMVS openMVS
 RUN --mount=type=cache,target=/opt/vcpkg/cache,sharing=locked \
-    --mount=type=cache,target=/build/openMVS/mybuild,sharing=locked \
     set -Eeuo pipefail; \
     export TRIPLET="$(uname -m | sed 's/x86_64/x64/;s/aarch64/arm64/')-linux"; \
     if [ "$BUILD_TYPE" = "Release" ]; then \
@@ -197,8 +200,45 @@ RUN --mount=type=cache,target=/opt/vcpkg/cache,sharing=locked \
     cmake --build openMVS/mybuild -j"$(nproc)"; \
     cmake --install openMVS/mybuild --prefix /build/install; \
     cp -r /usr/local/bin/OpenMVS /build/install/bin/OpenMVS; \
-    ccache --show-stats --verbose; \
-    rm -r "openMVS/mybuild/vcpkg_installed"
+    grep -shoE '[0-9a-f]{64}' "$LOG" openMVS/mybuild/vcpkg-manifest-install.log >> /tmp/vcpkg-used-abis.txt 2>/dev/null || true; \
+    rm -rf openMVS/mybuild; \
+    if [ -f /tmp/vcpkg-used-abis.txt ]; then \
+      sort -u /tmp/vcpkg-used-abis.txt | while read -r h; do \
+        f="${VCPKG_DEFAULT_BINARY_CACHE}/${h:0:2}/${h}.zip"; \
+        [ -f "$f" ] && touch "$f"; \
+      done; \
+      rm -f /tmp/vcpkg-used-abis.txt; \
+    fi; \
+    python3 -c "
+import os, sys
+d = sys.argv[1]
+max_b = int(sys.argv[2])
+files = []
+tot = 0
+for root, _, fnames in os.walk(d):
+    for f in fnames:
+        if f.endswith('.zip'):
+            p = os.path.join(root, f)
+            try:
+                st = os.stat(p)
+                files.append((st.st_mtime, st.st_size, p))
+                tot += st.st_size
+            except OSError:
+                pass
+if tot > max_b:
+    files.sort(key=lambda x: x[0])
+    for _, sz, p in files:
+        if tot <= max_b:
+            break
+        try:
+            os.remove(p)
+            tot -= sz
+        except OSError:
+            pass
+" "${VCPKG_DEFAULT_BINARY_CACHE}" 5368709120; \
+    find "${VCPKG_DEFAULT_BINARY_CACHE}" -type d -empty -delete 2>/dev/null || true; \
+    ccache --cleanup; \
+    ccache --show-stats --verbose
 
 ###############################################################################
 # Strip binaries (only for Release builds)
