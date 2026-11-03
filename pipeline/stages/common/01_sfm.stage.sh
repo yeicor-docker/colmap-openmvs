@@ -8,6 +8,10 @@ OUTPUTS=("${WORK_DIR}/openmvs/scene.sfm" "${WORK_DIR}/openmvs/scene.mvs")
 run_stage_function() {
     cd "${WORK_DIR}"
     mkdir -p openmvs && cd openmvs
+    if is_true "${SINGLE_CAMERA:-0}"; then
+        log_err "SINGLE_CAMERA is not supported by the OpenMVS-native pipelines (openmvs-full-sparse / openmvs-full-dense): CreateStructure has no single-camera option"
+        return 1
+    fi
     # Auto-detect detector type only if not overridden via OPENMVS_CREATE_STRUCTURE_ARGS
     if ! echo " ${OPENMVS_CREATE_STRUCTURE_ARGS:-} " | grep -qE '[-]{1,2}t[ =]|detector-type[ =]'; then
         local detector_type="SIFTGPU"
