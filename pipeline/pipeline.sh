@@ -336,6 +336,19 @@ main() {
     fi
     log_endgroup
 
+    # Change our own nice level before doing any work: every stage, tool and
+    # subprocess started afterwards inherits it. Set NICE_LEVEL=0 to disable.
+    local nice_level="${NICE_LEVEL:-10}"
+    if [[ ! "$nice_level" =~ ^-?[0-9]+$ ]]; then
+        log_err "Invalid NICE_LEVEL='$nice_level' (expected an integer from -20 to 19); keeping current priority"
+    elif [[ "$nice_level" != "0" ]]; then
+        if renice -n "$nice_level" -p $$ >/dev/null 2>&1; then
+            log "Process priority: nice $nice_level (inherited by all subprocesses)"
+        else
+            log_err "Could not set NICE_LEVEL=$nice_level (insufficient privileges?); keeping current priority"
+        fi
+    fi
+
     log_group "file=pipeline.sh,section=tools" "Tool Discovery"
     eval "$(${SCRIPT_DIR}/discover.sh --print-vars-shell)" || { log_err "Failed to discover tools"; exit 1; }
 
