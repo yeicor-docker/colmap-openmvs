@@ -106,6 +106,51 @@ main() {
         fi
     }
 
+    # List COLMAP sparse reconstruction components (0, 1, 2, ...).
+    component_ids() {
+        local dir
+        for dir in "${WORK_DIR}/colmap/sparse"/*/; do
+            if [[ -f "${dir}cameras.bin" ]]; then
+                basename "$dir"
+            fi
+        done | sort -n
+    }
+
+    # Choose the output directory for a COLMAP component. A single component
+    # keeps the legacy flat layout; multiple components each get a subdirectory.
+    component_output_dir() {
+        local base="$1" component="$2"
+        if [[ "$(component_ids | wc -l)" -le 1 ]]; then
+            printf '%s\n' "$base"
+        else
+            printf '%s/%s\n' "$base" "$component"
+        fi
+    }
+
+    # List OpenMVS working directories for the available scenes. COLMAP
+    # pipelines use one directory per sparse component; OpenMVS-native
+    # pipelines use the flat layout (openmvs/scene.mvs).
+    openmvs_scene_dirs() {
+        local base="${WORK_DIR}/openmvs"
+        if [[ -d "${WORK_DIR}/colmap/sparse" ]]; then
+            local component
+            while IFS= read -r component; do
+                component_output_dir "$base" "$component"
+            done < <(component_ids)
+        elif [[ -f "${base}/scene.mvs" ]]; then
+            printf '%s\n' "$base"
+        fi
+    }
+
+    # Separate per-component runs in the logs, but only when a stage actually
+    # processes multiple components.
+    log_component_header() {
+        local label="$1" index="$2" total="$3"
+        if [[ "$total" -gt 1 ]]; then
+            log "── Component ${label} (${index}/${total}) ──"
+        fi
+    }
+
     # Compute and store hash for a stage's inputs and outputs
     stage_hash_path() {
         echo "${PIPELINE_DIR}/stage_${1}.hash"
