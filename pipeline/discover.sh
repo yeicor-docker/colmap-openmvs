@@ -303,6 +303,23 @@ extraction.
 END_VAR
 
 BEGIN_VAR
+NICE_LEVEL
+UNIX nice level applied to the pipeline process before any stage runs.
+
+The value is inherited by every child process and subprocess, so COLMAP,
+OpenMVS and all tools they launch run at this priority. Accepted values are
+-20 (highest priority) to 19 (lowest priority).
+
+Set to 0 to keep the priority inherited from the container/parent process.
+Raising priority (using a value lower than the current one) requires root
+privileges; if it cannot be applied, the pipeline logs a warning and keeps
+the current priority.
+
+Default:
+10
+END_VAR
+
+BEGIN_VAR
 PIPELINE
 Selects the reconstruction pipeline to use.
 
