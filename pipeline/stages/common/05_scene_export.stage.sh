@@ -26,9 +26,14 @@ run_stage_function() {
         dense_dir=$(component_output_dir "${WORK_DIR}/colmap/dense" "$component")
         output_dir=$(component_output_dir "${WORK_DIR}/openmvs" "$component")
         mkdir -p "$output_dir"
+        local camera_args=""
+        if is_true "${SINGLE_CAMERA:-0}" && ! echo " ${OPENMVS_INTERFACE_COLMAP_ARGS:-} " | grep -qE -- '--common-intrinsics([[:space:]=]|$)'; then
+            camera_args="--common-intrinsics 1"
+        fi
         InterfaceCOLMAP \
             -i "$dense_dir" \
             -o "${output_dir}/scene.mvs" \
+            ${camera_args} \
             ${OPENMVS_INTERFACE_COLMAP_ARGS}
     done
 }

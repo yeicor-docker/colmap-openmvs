@@ -320,6 +320,23 @@ Default:
 END_VAR
 
 BEGIN_VAR
+SINGLE_CAMERA
+If true, assume that every input image was captured with the same physical
+camera (same intrinsics).
+
+For COLMAP-based pipelines this enables COLMAP's ImageReader.single_camera
+option, so all images share one camera during feature extraction and mapping.
+It also forces common intrinsics when exporting the reconstruction to OpenMVS.
+This is faster and more accurate when the assumption holds.
+
+Disabled by default (no assumption about the number of cameras).
+
+Not supported by the OpenMVS-native pipelines (openmvs-full-sparse and
+openmvs-full-dense), because CreateStructure has no equivalent option; using
+it there fails with a clear error.
+END_VAR
+
+BEGIN_VAR
 PIPELINE
 Selects the reconstruction pipeline to use.
 

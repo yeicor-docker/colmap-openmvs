@@ -151,6 +151,14 @@ main() {
         fi
     }
 
+    # Accept the usual spellings for boolean configuration values.
+    is_true() {
+        case "${1:-}" in
+            1|true|TRUE|yes|YES|on|ON) return 0 ;;
+            *) return 1 ;;
+        esac
+    }
+
     # Compute and store hash for a stage's inputs and outputs
     stage_hash_path() {
         echo "${PIPELINE_DIR}/stage_${1}.hash"
