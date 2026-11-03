@@ -2,13 +2,13 @@
 DISPLAY_NAME="Extract Keyframes from Videos"
 DEPENDENCIES=()
 INPUTS=("${WORK_DIR}/videos")
-OUTPUTS=("${IMAGES_DIR}/.keyframes_extracted.done")
+OUTPUTS=("${WORK_DIR}/.keyframes_extracted.done")
 
 run_stage_function() {
     local videos_dir="${WORK_DIR}/videos"
     if [[ ! -d "$videos_dir" ]]; then
         log "videos/ directory not found, nothing to extract"
-        touch "${IMAGES_DIR}/.keyframes_extracted.done"
+        touch "${WORK_DIR}/.keyframes_extracted.done"
         return 0
     fi
 
@@ -20,6 +20,7 @@ run_stage_function() {
 
     if [[ ${#video_files[@]} -eq 0 ]]; then
         log "videos/ directory is empty, nothing to extract"
+        touch "${WORK_DIR}/.keyframes_extracted.done"
         return 0
     fi
 
@@ -108,5 +109,5 @@ run_stage_function() {
         rm -f "${video_files[@]}"
     fi
 
-    touch "${IMAGES_DIR}/.keyframes_extracted.done"
+    touch "${WORK_DIR}/.keyframes_extracted.done"
 }
