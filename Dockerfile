@@ -5,7 +5,9 @@
 ###############################################################################
 ARG BASE_IMAGE=set-base-image-to-nvidia-cuda-devel-with-ubuntu-base-or-simply-ubuntu-for-cpu-mode
 ARG RUNTIME_IMAGE=set-runtime-image-to-nvidia-cuda-runtime-with-ubuntu-base-or-simply-ubuntu-for-cpu-mode
-ARG CUDA_ARCHITECTURES=native
+# Compile for every CUDA major architecture: the images are distributed, and
+# CI builds without a GPU, where "native" cannot be resolved.
+ARG CUDA_ARCHITECTURES=all-major
 ARG BUILD_TYPE=Release
 
 # Internal
@@ -200,7 +202,9 @@ RUN --mount=type=cache,target=/opt/vcpkg/cache,sharing=locked \
     fi; \
     cmake --build openMVS/mybuild -j"$(nproc)"; \
     cmake --install openMVS/mybuild --prefix /build/install; \
-    cp -r /usr/local/bin/OpenMVS /build/install/bin/OpenMVS; \
+    if [ -d /usr/local/bin/OpenMVS ] && [ ! -e /build/install/bin/OpenMVS ]; then \
+      cp -r /usr/local/bin/OpenMVS /build/install/bin/OpenMVS; \
+    fi; \
     grep -shoE '[0-9a-f]{64}' "$LOG" openMVS/mybuild/vcpkg-manifest-install.log >> /tmp/vcpkg-used-abis.txt 2>/dev/null || true; \
     rm -rf openMVS/mybuild; \
     python3 /scripts/prune_cache.py --cache-dir "${VCPKG_DEFAULT_BINARY_CACHE}" --max-bytes 5368709120 --touch-abis /tmp/vcpkg-used-abis.txt; \
