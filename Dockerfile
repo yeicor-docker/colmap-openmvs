@@ -5,9 +5,9 @@
 ###############################################################################
 ARG BASE_IMAGE=set-base-image-to-nvidia-cuda-devel-with-ubuntu-base-or-simply-ubuntu-for-cpu-mode
 ARG RUNTIME_IMAGE=set-runtime-image-to-nvidia-cuda-runtime-with-ubuntu-base-or-simply-ubuntu-for-cpu-mode
-# Compile for every CUDA major architecture: the images are distributed, and
-# CI builds without a GPU, where "native" cannot be resolved.
-ARG CUDA_ARCHITECTURES=all-major
+# CUDA 13 dropped pre-Turing GPUs, but CMake 3.28's "all-major" still includes
+# them. List the major architectures supported by the CUDA toolkit instead.
+ARG CUDA_ARCHITECTURES="75;80;90;100;110;120"
 ARG BUILD_TYPE=Release
 
 # Internal
