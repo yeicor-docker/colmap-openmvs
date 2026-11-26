@@ -17,10 +17,8 @@ run_stage_function() {
     local i scene_dir
     for i in "${!scene_dirs[@]}"; do
         scene_dir="${scene_dirs[$i]}"
-        log_component_header "$(basename "$scene_dir")" "$((i + 1))" "$total"
-        (
-            cd "$scene_dir"
-            RefineMesh -i scene.mvs -m scene_mesh.ply -o scene_mesh_refined.ply ${OPENMVS_REFINE_MESH_ARGS}
-        )
+        run_component "$(basename "$scene_dir")" "$(basename "$scene_dir")" "$((i + 1))" "$total" "$scene_dir" \
+            RefineMesh -i scene.mvs -m scene_mesh.ply -o scene_mesh_refined.ply ${OPENMVS_REFINE_MESH_ARGS} || return 1
     done
+    require_component_success "$total"
 }
