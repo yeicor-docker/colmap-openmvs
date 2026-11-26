@@ -88,9 +88,10 @@ main() {
     }
 
     # Logging functions
-    log()     { echo "[$(date '+%H:%M:%S')] • $*"; }
-    log_ok()  { echo "[$(date '+%H:%M:%S')] ✓ $*"; }
-    log_err() { echo "[$(date '+%H:%M:%S')] ✗ $*" >&2; }
+    log()      { echo "[$(date '+%H:%M:%S')] • $*"; }
+    log_ok()   { echo "[$(date '+%H:%M:%S')] ✓ $*"; }
+    log_warn() { echo "[$(date '+%H:%M:%S')] ⚠ $*"; }
+    log_err()  { echo "[$(date '+%H:%M:%S')] ✗ $*" >&2; }
 
     # Quick hash of a file or directory (paths + sizes + mtimes for change detection)
     hash_path() {
@@ -116,6 +117,51 @@ main() {
         done | sort -n
     }
 
+    # Components that failed in an earlier stage are recorded here so later
+    # stages skip them instead of failing on their missing inputs/outputs.
+    component_failure_marker() {
+        printf '%s/failed/%s\n' "$PIPELINE_DIR" "$1"
+    }
+
+    # A failure only affects later stages: stages before the failing one still
+    # process the component, and the failing stage keeps it excluded (cached)
+    # until it is re-run, at which point clear_component_failures retries it.
+    component_failed() {
+        local marker failed_stage
+        marker=$(component_failure_marker "$1")
+        [[ -f "$marker" ]] || return 1
+        failed_stage=$(cat "$marker")
+        [[ "$failed_stage" < "${stage_name:-}" || "$failed_stage" == "${stage_name:-}" ]]
+    }
+
+    mark_component_failed() {
+        local marker
+        marker=$(component_failure_marker "$1")
+        mkdir -p "$(dirname "$marker")"
+        printf '%s\n' "$stage_name" > "$marker"
+    }
+
+    # Remove failures recorded by a given stage, so re-running it retries them.
+    clear_component_failures() {
+        local marker removed=1
+        for marker in "${PIPELINE_DIR}/failed"/*; do
+            [[ -f "$marker" ]] || continue
+            if [[ "$(cat "$marker")" == "$1" ]]; then
+                rm -f "$marker"
+                removed=0
+            fi
+        done
+        return "$removed"
+    }
+
+    # Components still viable for the current stage.
+    active_component_ids() {
+        local component
+        while IFS= read -r component; do
+            component_failed "$component" || printf '%s\n' "$component"
+        done < <(component_ids)
+    }
+
     # Choose the output directory for a COLMAP component. A single component
     # keeps the legacy flat layout; multiple components each get a subdirectory.
     component_output_dir() {
@@ -135,7 +181,7 @@ main() {
         if [[ -d "${WORK_DIR}/colmap/sparse" ]]; then
             local component
             while IFS= read -r component; do
-                component_output_dir "$base" "$component"
+                component_failed "$component" || component_output_dir "$base" "$component"
             done < <(component_ids)
         elif [[ -f "${base}/scene.mvs" ]]; then
             printf '%s\n' "$base"
@@ -148,6 +194,42 @@ main() {
         local label="$1" index="$2" total="$3"
         if [[ "$total" -gt 1 ]]; then
             log "── Component ${label} (${index}/${total}) ──"
+        fi
+    }
+
+    # Run one component command. In multi-component runs a failing component is
+    # recorded and skipped by later stages instead of aborting the pipeline.
+    # Usage: run_component <key> <label> <index> <total> <dir> <command...>
+    component_successes=0
+    run_component() {
+        local key="$1" label="$2" index="$3" total="$4" dir="$5"
+        shift 5
+        log_component_header "$label" "$index" "$total"
+        if ( cd "$dir" && "$@" ); then
+            component_successes=$((component_successes + 1))
+            return 0
+        fi
+        if (( total > 1 )); then
+            mark_component_failed "$key"
+            log_warn "Component $label failed; continuing with the remaining components"
+            return 0
+        fi
+        return 1
+    }
+
+    # Fail a stage when no component was processed or every component failed.
+    require_component_success() {
+        local total="$1"
+        if (( total == 0 )); then
+            log_err "No components available to process"
+            return 1
+        fi
+        if (( component_successes == 0 )); then
+            log_err "All $total component(s) failed"
+            return 1
+        fi
+        if (( component_successes < total )); then
+            log_warn "$((total - component_successes)) of $total component(s) failed and will be skipped by later stages"
         fi
     }
 
@@ -313,11 +395,17 @@ main() {
     }
 
     run_stage() {
+        component_successes=0
         if [[ $VERBOSE == 1 ]]; then
             (set -x; run_stage_function)
         else
             run_stage_function
         fi
+    }
+
+    load_stage() {
+        unset DEPENDENCIES INPUTS OUTPUTS FILE_DEPENDENCIES DISPLAY_NAME run_stage_function
+        source "$1"
     }
 
     if [[ ! -d "$WORK_DIR/images" ]] && [[ ! -d "$WORK_DIR/videos" ]]; then
@@ -402,8 +490,7 @@ main() {
         stage_name=$(basename "$stage_file" .stage.sh)
         ((stage_count++))
 
-        unset DEPENDENCIES INPUTS OUTPUTS FILE_DEPENDENCIES DISPLAY_NAME run_stage_function
-        if ! source "$stage_file"; then
+        if ! load_stage "$stage_file"; then
             log_err "Failed to load stage file: $stage_file"
             exit 1
         fi
@@ -462,6 +549,15 @@ main() {
             continue
         fi
 
+        # A re-run of a stage retries the components that failed in its previous
+        # run; failures from earlier stages still keep their components out.
+        if clear_component_failures "$stage_name"; then
+            if ! load_stage "$stage_file"; then
+                log_err "Failed to load stage file: $stage_file"
+                exit 1
+            fi
+        fi
+
         # Execute stage
         stage_log=$(stage_log_path "$stage_name")
         if [[ "$stage_status" == "forced" ]]; then
@@ -482,6 +578,13 @@ main() {
         if [[ $exit_code -ne 0 ]]; then
             log_err "$stage_name (exit code: $exit_code)"
             log_err "See $stage_log for details"
+            exit 1
+        fi
+
+        # Reload metadata now that this run's component failures are recorded,
+        # so their missing outputs are not treated as stage failures.
+        if ! load_stage "$stage_file"; then
+            log_err "Failed to load stage file: $stage_file"
             exit 1
         fi
 

@@ -14,20 +14,18 @@ while IFS= read -r component; do
     else
         OUTPUTS+=("${dense_dir}/meshed-poisson.ply" "${dense_dir}/meshed.ply")
     fi
-done < <(component_ids)
+done < <(active_component_ids)
 unset _mesher
 
 run_stage_function() {
     cd "${WORK_DIR}/colmap"
     local mesher="${COLMAP_MESHER:-poisson_mesher}"
     local components=()
-    mapfile -t components < <(component_ids)
+    mapfile -t components < <(active_component_ids)
     local total=${#components[@]}
-    local i component dense_dir
-    for i in "${!components[@]}"; do
-        component="${components[$i]}"
-        log_component_header "$component" "$((i + 1))" "$total"
-        dense_dir=$(component_output_dir "${WORK_DIR}/colmap/dense" "$component")
+
+    _mesh_component() {
+        local dense_dir="$1"
         if [[ "$mesher" == "delaunay_mesher" ]]; then
             colmap delaunay_mesher \
                 --input_path "$dense_dir" \
@@ -41,5 +39,14 @@ run_stage_function() {
                 ${COLMAP_POISSON_MESHER_ARGS}
             ln -sf meshed-poisson.ply "${dense_dir}/meshed.ply"
         fi
+    }
+
+    local i component dense_dir
+    for i in "${!components[@]}"; do
+        component="${components[$i]}"
+        dense_dir=$(component_output_dir "${WORK_DIR}/colmap/dense" "$component")
+        run_component "$component" "$component" "$((i + 1))" "$total" "$dense_dir" \
+            _mesh_component "$dense_dir" || return 1
     done
+    require_component_success "$total"
 }

@@ -17,10 +17,8 @@ run_stage_function() {
     local i scene_dir
     for i in "${!scene_dirs[@]}"; do
         scene_dir="${scene_dirs[$i]}"
-        log_component_header "$(basename "$scene_dir")" "$((i + 1))" "$total"
-        (
-            cd "$scene_dir"
-            DensifyPointCloud scene.mvs -o scene_dense.mvs ${OPENMVS_DENSIFY_POINT_CLOUD_ARGS}
-        )
+        run_component "$(basename "$scene_dir")" "$(basename "$scene_dir")" "$((i + 1))" "$total" "$scene_dir" \
+            DensifyPointCloud scene.mvs -o scene_dense.mvs ${OPENMVS_DENSIFY_POINT_CLOUD_ARGS} || return 1
     done
+    require_component_success "$total"
 }
