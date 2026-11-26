@@ -37,10 +37,6 @@ done
 WORK_DIR="${1:-.}"
 shift || true
 
-IMAGES_DIR="${WORK_DIR}/images"
-VIDEOS_DIR="${WORK_DIR}/videos"
-PIPELINE_DIR="${WORK_DIR}/pipeline"
-
 # Parse options
 VERBOSE=0
 FORCE_STAGES=""
@@ -64,11 +60,16 @@ if [[ $RECOVER_LOGS == 1 ]]; then
     DRY_RUN=1
 fi
 
-# Validate WORK_DIR before creating PIPELINE_DIR
+# Validate and canonicalize WORK_DIR before creating PIPELINE_DIR
 if [[ ! -d "$WORK_DIR" ]]; then
     echo "Directory not found: $WORK_DIR" >&2
     exit 1
 fi
+WORK_DIR="$(cd "$WORK_DIR" && pwd)"
+
+IMAGES_DIR="${WORK_DIR}/images"
+VIDEOS_DIR="${WORK_DIR}/videos"
+PIPELINE_DIR="${WORK_DIR}/pipeline"
 mkdir -p "$PIPELINE_DIR"
 
 ################################################################################
